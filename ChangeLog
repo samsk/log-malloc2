@@ -1,0 +1,16 @@
+
+0.2.3 Thu Mar 29 18:58:35 CEST 2012
+	- improved initialization to be compatible with libraries
+		using malloc functions in lib constructor functions (like libproc)
+	- detect if backtrace() and backtrace_symbols_fd() is available
+	- some docu improvements
+
+0.2.2 Tue Mar 26 19:22:43 CEST 2012
+	- track real size of allocated memory using malloc_usable_size
+
+0.2.1 Wed Feb 14 16:12:05 CET 2012
+	- added posix_memalign/valloc tracking
+	- operate safely if allocation fails
+
+0.2.0 Wed Feb  8 19:42:13 CET 2012
+	- initial public release

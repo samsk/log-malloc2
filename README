@@ -1,0 +1,321 @@
+#! /usr/bin/less
+################################################################################
+
+Program		: log-malloc2 (library)
+Version		: 0.2.3
+Purpose		: Malloc logging library with backtrace and byte-exact memory
+			tracking.
+License		: GNU GPL v3 (see file COPYING)
+Author		: Samuel Behan <_samuel_._behan_(at)_dob_._sk> (c) 2011-2012
+Web		: http://devel.dob.sk/log-malloc2
+		  http://sam.blog.dob.sk/category/devel/log-malloc2 (blog)
+
+################################################################################
+
+---------
+- ABOUT -
+---------
+
+     log-malloc2 is library for tracking memory functions calls, that can be
+     preloaded using LD_PRELOAD (or similar technique):
+
+     Usage:
+	LD_PRELOAD=./liblog-malloc2.so command args ... 1022>/tmp/program.log
+
+     Having program compiled with debug information or -rdynamic makes backtrace
+     call stack better readable. Aferwards, you can use addr2line tool from GNU
+     binutils to convert addresses into exact source code line numbers.
+
+     This library is partialy based on log-malloc library, hence the name
+     log-malloc2 - and I'm too lazy to figure out better name. I've taken some
+     ideas from this library, but it's almost completely rewriten to make backtracing
+     work also on 64bit system, and to provide also additional usefull informations
+     regarding allocated memory.
+
+
+------------
+- FEATURES -
+------------
+
+	* logging to file descriptor 1022
+	* call stack backtrace (using GNU backtrace() if available)
+	* requested memory tracking (byte-exact)
+	* allocated memory tracking (byte-exact - using malloc_usable_size())
+	* process memory status tracking (from /proc/self/statm)
+	* call counting
+	* thread safe (this is needed only to prevent backtrace log mixing)
+
+
+---------------------------------
+- TRACKED FUNCTIONS & INTERNALS -
+---------------------------------
+
+	* malloc
+	* realloc
+	* calloc
+		Note: library changes parameters passed to calloc(nmemb, size)
+		  to calloc(1, nmemb*size). Allocated memory is exactly the same
+		  but there might(?) appear some problem due to this change.
+	* memalign
+	* posix_memalign
+	* valloc
+	* free
+		Note: call to free are not backtraced, also free(NULL) calls are
+		  completely ignored.
+
+     Library allocates additional 8 or 12 bytes (2-3 * sizeof(size_t)) per every allocated
+     memory. This is necessary to make byte-exact memory tracking possible.
+     This memory is placed in front of allocated memory and stores size of allocated
+     memory (1 x size_t) and check bits (1 x size_t) for allocated size number and
+     real-aligned allocated memory size (1 x size_t).
+     These data are also used to distinguish memory allocated by this library,
+     and memory that has been allocated by something else (whatever it was, you can
+     identify it by appended '!f' when free()-ing).
+
+     This functionality makes log-malloc2 library less resistant against random
+     memory overwrites, that will destroy library internal data (especially by
+     realloc/free), but incorrect memory overwrites are anyway bad, and this
+     makes them only better recognizable.
+
+     Library uses malloc_usable_size() function (if available) to determine how much memory
+     has been really allocated by libc. Allocated memory differs from requested memory, because
+     memory allocated usually allocates memory aligend to power of 2.
+
+     Note: Allocated memory status (MEM-STATUS) might and will differ from
+       numbers you will see it top/ps or statm data, because memory is allocated
+       in blocks that are usually greater than requested memory, but it might
+       be relatively close to MEM-STATUS-ALIGNED.
+       Google it ;)
+
+
+----------
+- OUTPUT -
+----------
+
+     Logfile has following structure
+
+	+ FUNCTION MEM-CHANGE MEM-IN? MEM-OUT? [MEM-STATUS:MEM-STATUS-ALIGNED] (FUNCTION-PARAMS) #STATM-DATA
+	BACKTRACE
+	...
+	...
+	+ FUNCTION....
+
+     Legend:
+
+	FUNCTION		- called function name (malloc/realloc/free...)
+	MEM-CHANGE		- bytes allocated/deallocated
+	MEM-IN			- (optional) input memory pointer
+	MEM-OUT			- (optional) (re)allocated memory pointer
+	MEM-STATUS		- actually allocated memory using functions
+	MEM-STATUS-ALIGNED	- sum of alligned allocated memory
+	FUNCTION-PARAMS		- parameter that has been passed to function
+	STATM-DATA		- copy of /proc/self/statm content
+
+
+------------------
+- EXAMPLE OUTPUT -
+------------------
+
+$ LD_PRELOAD=./../.libs/liblog-malloc2.so who 1022>&2
+
+ *** log-malloc trace-fd = 1022 ***
+ 
+ + malloc 53 0x0x7f3fad8e7068 [85:144]!
+ + calloc 1174 0x0x7f3fad8e70c8 [1259:1352] (1174 1)!
+ + malloc 53 0x0x7f3fad8e7588 [1312:1440]!
+ + malloc 56 0x0x7f3fad8e75e8 [1368:1528]!
+ + calloc 288 0x0x7f3fad8e7648 [1656:1840] (12 24)!
+ + calloc 32 0x0x7f3fad8e7028 [32:56] (1 32) #3133 167 130 13 0 85 0
+ /lib64/libdl.so.2(+0x1590)[0x7f3fac04e590]
+ /lib64/libdl.so.2(dlsym+0x4a)[0x7f3fac04e0aa]
+ ./../.libs/liblog-malloc2.so(_init+0xf1)[0x7f3fac7f4ca1]
+ /lib64/ld-linux-x86-64.so.2(+0xea19)[0x7f3faca06a19]
+ /lib64/ld-linux-x86-64.so.2(+0xeb57)[0x7f3faca06b57]
+ /lib64/ld-linux-x86-64.so.2(+0xc7a)[0x7f3fac9f8c7a]
+ [0x7fff5516e350]
+ + INIT [1656:1840] malloc=3 calloc=3 realloc=0 memalign=0/0 valloc=0 free=0
+ + malloc 384 0x0x7f3fad8e7788 [2040:2248] #3133 167 130 13 0 85 0
+ /lib64/libc.so.6(getutent+0x39)[0x7f3fac58c509]
+ who(+0x7205)[0x7f3facc21205]
+ who(+0x2aa2)[0x7f3facc1caa2]
+ who(main+0x3b2)[0x7f3facc1d752]
+ /lib64/libc.so.6(__libc_start_main+0xfd)[0x7f3fac48dcfd]
+ who(+0x20b9)[0x7f3facc1c0b9]
+ [0x7f3fad8e7038]
+ + realloc 384 0x(nil) 0x0x7f3fad8e7928 (0 384) [2424:2656] #3133 167 130 13 0 85 0
+ who(+0x5d25)[0x7f3facc1fd25]
+ who(+0x7320)[0x7f3facc21320]
+ who(+0x2aa2)[0x7f3facc1caa2]
+ who(main+0x3b2)[0x7f3facc1d752]
+ /lib64/libc.so.6(__libc_start_main+0xfd)[0x7f3fac48dcfd]
+ who(+0x20b9)[0x7f3facc1c0b9]
+ [0x0]
+ + realloc 384 0x0x7f3fad8e7928 0x0x7f3fad8e7928 (384 768) [2808:3040] #3133 167 130 13 0 85 0
+ who(+0x5d25)[0x7f3facc1fd25]
+ who(+0x7320)[0x7f3facc21320]
+ who(+0x2aa2)[0x7f3facc1caa2]
+ who(main+0x3b2)[0x7f3facc1d752]
+ /lib64/libc.so.6(__libc_start_main+0xfd)[0x7f3fac48dcfd]
+ who(+0x20b9)[0x7f3facc1c0b9]
+ [0x0]
+ + realloc 384 0x0x7f3fad8e7928 0x0x7f3fad8e7928 (768 1152) [3192:3424] #3133 167 130 13 0 85 0
+ who(+0x5d25)[0x7f3facc1fd25]
+ who(+0x7320)[0x7f3facc21320]
+ who(+0x2aa2)[0x7f3facc1caa2]
+ who(main+0x3b2)[0x7f3facc1d752]
+ /lib64/libc.so.6(__libc_start_main+0xfd)[0x7f3fac48dcfd]
+ who(+0x20b9)[0x7f3facc1c0b9]
+ [0x0]
+ + realloc 768 0x0x7f3fad8e7928 0x0x7f3fad8e7928 (1152 1920) [3960:4192] #3133 167 130 13 0 85 0
+ who(+0x5d25)[0x7f3facc1fd25]
+ who(+0x7320)[0x7f3facc21320]
+ who(+0x2aa2)[0x7f3facc1caa2]
+ who(main+0x3b2)[0x7f3facc1d752]
+ /lib64/libc.so.6(__libc_start_main+0xfd)[0x7f3fac48dcfd]
+ who(+0x20b9)[0x7f3facc1c0b9]
+ [0x0]
+ + realloc 1152 0x0x7f3fad8e7928 0x0x7f3fad8e7928 (1920 3072) [5112:5344] #3133 167 130 13 0 85 0
+ who(+0x5d25)[0x7f3facc1fd25]
+ who(+0x7320)[0x7f3facc21320]
+ who(+0x2aa2)[0x7f3facc1caa2]
+ who(main+0x3b2)[0x7f3facc1d752]
+ /lib64/libc.so.6(__libc_start_main+0xfd)[0x7f3fac48dcfd]
+ who(+0x20b9)[0x7f3facc1c0b9]
+ [0x0]
+ + malloc 18 0x0x7f3fad8e8548 [5130:5400] #3133 167 130 13 0 85 0
+ who(+0x5ccd)[0x7f3facc1fccd]
+ who(+0x2a52)[0x7f3facc1ca52]
+ who(+0x30fb)[0x7f3facc1d0fb]
+ who(main+0x3b2)[0x7f3facc1d752]
+ /lib64/libc.so.6(__libc_start_main+0xfd)[0x7f3fac48dcfd]
+ who(+0x20b9)[0x7f3facc1c0b9]
+ /lib64/libc.so.6(__sprintf_chk+0x7f)[0x7f3fac56746f]
+ + malloc 15 0x0x7f3fad8e8588 [5145:5440] #3133 167 130 13 0 85 0
+ /lib64/libc.so.6(__strdup+0x22)[0x7f3fac4f1f42]
+ /lib64/libc.so.6(+0x9aca5)[0x7f3fac509ca5]
+ /lib64/libc.so.6(+0x9b00b)[0x7f3fac50a00b]
+ who(+0x24d3)[0x7f3facc1c4d3]
+ who(+0x264a)[0x7f3facc1c64a]
+ who(+0x30fb)[0x7f3facc1d0fb]
+ [0x0]
+ + malloc 568 0x0x7f3fad8e85b8 [5713:6040] #3133 167 130 13 0 85 0
+ /lib64/libc.so.6(+0x67efb)[0x7f3fac4d6efb]
+ /lib64/libc.so.6(+0x9b36f)[0x7f3fac50a36f]
+ /lib64/libc.so.6(+0x9acb8)[0x7f3fac509cb8]
+ /lib64/libc.so.6(+0x9b00b)[0x7f3fac50a00b]
+ who(+0x24d3)[0x7f3facc1c4d3]
+ who(+0x264a)[0x7f3facc1c64a]
+ [0x3]
+ + malloc 1467 0x0x7f3fad8e8818 [7180:7536] #3134 167 130 13 0 86 0
+ /lib64/libc.so.6(+0x9b5eb)[0x7f3fac50a5eb]
+ /lib64/libc.so.6(+0x9acb8)[0x7f3fac509cb8]
+ /lib64/libc.so.6(+0x9b00b)[0x7f3fac50a00b]
+ who(+0x24d3)[0x7f3facc1c4d3]
+ who(+0x264a)[0x7f3facc1c64a]
+ who(+0x30fb)[0x7f3facc1d0fb]
+ [0x4f70ad74]
+ + free -568 0x0x7f3fad8e85b8 [6612:6936] #3133 229 191 13 0 85 0
+ + malloc 20 0x0x7f3fad8e85b8 [6632:6992] #3133 229 191 13 0 85 0
+ /lib64/libc.so.6(+0x9a1df)[0x7f3fac5091df]
+ /lib64/libc.so.6(+0x9bafa)[0x7f3fac50aafa]
+ /lib64/libc.so.6(+0x9acb8)[0x7f3fac509cb8]
+ /lib64/libc.so.6(+0x9b00b)[0x7f3fac50a00b]
+ who(+0x24d3)[0x7f3facc1c4d3]
+ who(+0x264a)[0x7f3facc1c64a]
+ /lib64/libc.so.6(+0x9b5eb)[0x7f3fac50a5eb]
+ + malloc 20 0x0x7f3fad8e85f8 [6652:7048] #3133 229 191 13 0 85 0
+ /lib64/libc.so.6(+0x9a1df)[0x7f3fac5091df]
+ /lib64/libc.so.6(+0x9bafa)[0x7f3fac50aafa]
+ /lib64/libc.so.6(+0x9acb8)[0x7f3fac509cb8]
+ /lib64/libc.so.6(+0x9b00b)[0x7f3fac50a00b]
+ who(+0x24d3)[0x7f3facc1c4d3]
+ who(+0x264a)[0x7f3facc1c64a]
+ /lib64/libc.so.6(+0x9b5eb)[0x7f3fac50a5eb]
+ + malloc 21 0x0x7f3fad8e8638 [6673:7104] #3133 229 191 13 0 85 0
+ /lib64/libc.so.6(+0x9a1df)[0x7f3fac5091df]
+ /lib64/libc.so.6(+0x9bafa)[0x7f3fac50aafa]
+ /lib64/libc.so.6(+0x9acb8)[0x7f3fac509cb8]
+ /lib64/libc.so.6(+0x9b00b)[0x7f3fac50a00b]
+ who(+0x24d3)[0x7f3facc1c4d3]
+ who(+0x264a)[0x7f3facc1c64a]
+ /lib64/libc.so.6(+0x9b5eb)[0x7f3fac50a5eb]
+ + malloc 20 0x0x7f3fad8e8678 [6693:7160] #3133 229 191 13 0 85 0
+ /lib64/libc.so.6(+0x9a1df)[0x7f3fac5091df]
+ /lib64/libc.so.6(+0x9bafa)[0x7f3fac50aafa]
+ /lib64/libc.so.6(+0x9acb8)[0x7f3fac509cb8]
+ /lib64/libc.so.6(+0x9b00b)[0x7f3fac50a00b]
+ who(+0x24d3)[0x7f3facc1c4d3]
+ who(+0x264a)[0x7f3facc1c64a]
+ /lib64/libc.so.6(+0x9b5eb)[0x7f3fac50a5eb]
+ + malloc 1 0x0x7f3fad8e86b8 [6694:7200] #3133 229 191 13 0 85 0
+ who(+0x5ccd)[0x7f3facc1fccd]
+ who(+0x226c)[0x7f3facc1c26c]
+ who(+0x267d)[0x7f3facc1c67d]
+ who(+0x30fb)[0x7f3facc1d0fb]
+ who(main+0x3b2)[0x7f3facc1d752]
+ /lib64/libc.so.6(__libc_start_main+0xfd)[0x7f3fac48dcfd]
+ [0x8]
+ + malloc 448 0x0x7f3fad8e8df8 [7142:7672] #3133 229 191 13 0 85 0
+ who(+0xa58a)[0x7f3facc2458a]
+ who(+0x777e)[0x7f3facc2177e]
+ who(+0x73c1)[0x7f3facc213c1]
+ who(+0x5ff8)[0x7f3facc1fff8]
+ who(+0x22f1)[0x7f3facc1c2f1]
+ who(+0x267d)[0x7f3facc1c67d]
+ [0x7fff5516db70]
+ + malloc 1232 0x0x7f3fad8e8fd8 [8374:8928] #3133 229 191 13 0 85 0
+ who(+0xa555)[0x7f3facc24555]
+ who(+0x777e)[0x7f3facc2177e]
+ who(+0x73c1)[0x7f3facc213c1]
+ who(+0x5ff8)[0x7f3facc1fff8]
+ who(+0x22f1)[0x7f3facc1c2f1]
+ who(+0x267d)[0x7f3facc1c67d]
+ [0x7fff5516db70]
+ + malloc 12 0x0x7f3fad8e86e8 [8386:8968] #3133 229 191 13 0 85 0
+ who(+0x7c9b)[0x7f3facc21c9b]
+ who(+0x73c1)[0x7f3facc213c1]
+ who(+0x5ff8)[0x7f3facc1fff8]
+ who(+0x22f1)[0x7f3facc1c2f1]
+ who(+0x267d)[0x7f3facc1c67d]
+ who(+0x30fb)[0x7f3facc1d0fb]
+ [0x65f04adc23776c39]
+ + realloc 12 0x0x7f3fad8e86e8 0x0x7f3fad8e86e8 (12 24) [8398:8984] #3133 229 191 13 0 85 0
+ who(+0x865b)[0x7f3facc2265b]
+ who(+0x73c1)[0x7f3facc213c1]
+ who(+0x5ff8)[0x7f3facc1fff8]
+ who(+0x22f1)[0x7f3facc1c2f1]
+ who(+0x267d)[0x7f3facc1c67d]
+ who(+0x30fb)[0x7f3facc1d0fb]
+ [0x7fff5516d758]
+ + realloc 24 0x0x7f3fad8e86e8 0x0x7f3fad8e86e8 (24 48) [8422:9000] #3133 229 191 13 0 85 0
+ who(+0x865b)[0x7f3facc2265b]
+ who(+0x73c1)[0x7f3facc213c1]
+ who(+0x5ff8)[0x7f3facc1fff8]
+ who(+0x22f1)[0x7f3facc1c2f1]
+ who(+0x267d)[0x7f3facc1c67d]
+ who(+0x30fb)[0x7f3facc1d0fb]
+ [0x7fff5516d758]
+ + realloc 48 0x0x7f3fad8e86e8 0x0x7f3fad8e86e8 (48 96) [8470:9048] #3133 229 191 13 0 85 0
+ who(+0x865b)[0x7f3facc2265b]
+ who(+0x73c1)[0x7f3facc213c1]
+ who(+0x5ff8)[0x7f3facc1fff8]
+ who(+0x22f1)[0x7f3facc1c2f1]
+ who(+0x267d)[0x7f3facc1c67d]
+ who(+0x30fb)[0x7f3facc1d0fb]
+ [0x7fff5516d750]
+ + realloc -43 0x0x7f3fad8e86e8 0x0x7f3fad8e86e8 (96 53) [8427:9016] #3133 229 191 13 0 85 0
+ who(+0x9484)[0x7f3facc23484]
+ who(+0x73c1)[0x7f3facc213c1]
+ who(+0x5ff8)[0x7f3facc1fff8]
+ who(+0x22f1)[0x7f3facc1c2f1]
+ who(+0x267d)[0x7f3facc1c67d]
+ who(+0x30fb)[0x7f3facc1d0fb]
+ [0x7fff5516d750]
+ + free -1232 0x0x7f3fad8e8fd8 [7195:7760] #3133 229 191 13 0 85 0
+ + free -448 0x0x7f3fad8e8df8 [6747:7288] #3133 229 191 13 0 85 0
+ sam      pts/1        Mar 27 09:02 (*********************)
+ + free -53 0x0x7f3fad8e86e8 [6694:7200] #3134 229 191 13 0 86 0
+ + free -1 0x0x7f3fad8e86b8 [6693:7160] #3134 229 191 13 0 86 0
+ + free -3072 0x0x7f3fad8e7928 [3621:4064] #3134 229 191 13 0 86 0
+ + FINI [3621:4064] malloc=16 calloc=3 realloc=9 memalign=0/0 valloc=0 free=6
+ 

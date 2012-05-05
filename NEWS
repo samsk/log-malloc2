@@ -1,0 +1,30 @@
+0.2.3	2012-03-29
+
+IMPROVEMENTS
+
+	* improved library compatibility
+	* detect if backtrace() is available
+	* some docu fixes
+
+0.2.2	2012-03-26
+
+IMPROVEMENTS
+
+	* track really allocated memory using malloc_usable_size()
+
+0.2.1	2012-02-14
+
+BUGFIX + IMPROVEMENTS
+
+	* tracking more functions
+	* fixed possible segfault if alloc fails
+
+0.2.0	2012-02-08
+
+INITAL RELEASE
+
+	* initial public release
+	* autoconf/automake packaged
+	* minimal documentation in README file
+
+
