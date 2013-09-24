@@ -81,7 +81,7 @@ struct log_malloc_s {
 #ifdef HAVE_MALLOC_USABLE_SIZE
 	size_t rsize;		/* really allocated size */
 #endif
-	char   ptr[0];		/* user memory begin */
+	char   ptr[0] __attribute__ ((aligned (__BIGGEST_ALIGNMENT__)));	/* user memory begin */
 };
 #define MEM_OFF       (sizeof(struct log_malloc_s))
 
@@ -404,6 +404,9 @@ void *memalign(size_t boundary, size_t size)
 	if(!DL_RESOLVE_CHECK(memalign))
 		return NULL;
 
+	if(boundary>MEM_OFF)
+		return NULL;
+
 	if((mem = real_memalign(boundary, size + MEM_OFF)) != NULL)
 	{
 		mem->size = size;
@@ -438,6 +441,9 @@ int posix_memalign(void **memptr, size_t alignment, size_t size)
 	sig_atomic_t memruse = 0;
 
 	if(!DL_RESOLVE_CHECK(posix_memalign))
+		return ENOMEM;
+
+	if(alignment>MEM_OFF)
 		return ENOMEM;
 
 	if((ret = real_posix_memalign((void **)&mem, alignment, size + MEM_OFF)) == 0)
