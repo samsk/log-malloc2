@@ -1,4 +1,10 @@
 
+0.2.4 Wed Sep 24 22:15:31 CEST 2013
+	- removed dummy prefix 0x from %p printouts (I'm pretty blind - I've fixed
+		it 'lightyears' ago in some private copy and not pushed it to repo ;-)
+	- added possibility to disable call counts, not everyone needs them and they
+		might harm performance, because of using CAS operation
+
 0.2.3 Thu Mar 29 18:58:35 CEST 2012
 	- improved initialization to be compatible with libraries
 		using malloc functions in lib constructor functions (like libproc)

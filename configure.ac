@@ -1,7 +1,7 @@
 ## liblog-malloc2
 ####
 
-AC_INIT([log-malloc2], [0.2.3], [_samuel_._behan_(at)_dob_._sk], [log-malloc2],
+AC_INIT([log-malloc2], [0.2.4], [_samuel_._behan_(at)_dob_._sk], [log-malloc2],
         [http://devel.dob.sk/log-malloc2])
 AC_PREREQ([2.59])
 AM_INIT_AUTOMAKE([1.10 -Wall no-define])
@@ -13,7 +13,7 @@ AC_CONFIG_HEADERS([config.h])
 AC_PROG_CXX
 LT_INIT([disable-static])
 
-AC_CHECK_FUNCS([ pread backtrace backtrace_symbols_fd malloc_usable_size ])
+AC_CHECK_FUNCS([ pread backtrace backtrace_symbols_fd ])
 
 AC_CHECK_LIB(dl, dlsym, , [
 	AC_MSG_ERROR([
@@ -25,8 +25,27 @@ Can't find the pthread library (libpthread.so) !])])
 
 AC_ARG_ENABLE([optimize],
   AS_HELP_STRING([--disable-optimize], [do not optimize library]),
-  [no_optimize=yes], no_optimize=no
+  [no_optimize=yes], [no_optimize=no]
 )
+
+AC_ARG_ENABLE([call-count],
+  AS_HELP_STRING([--disable-call-count], [do not count function calls]),
+  [no_call_count=no], [no_call_count=yes]
+)
+
+if test "x$no_call_count" = "xyes"; then
+   AC_DEFINE(DISABLE_CALL_COUNTS, 1, [Disable functions call counting])
+fi
+
+no_usable_size=no
+AC_ARG_ENABLE([usable-size],
+  AS_HELP_STRING([--disable-usable-size], [do not check usable size]),
+  [no_usable_size=no], [no_usable_size=yes]
+)
+
+if test "x$no_usable_size" = "xyes"; then
+	AC_CHECK_FUNCS([ malloc_usable_size ])
+fi
 
 # FLAGS
 CFLAGS="-DWITH_PTHREADS -D_GNU_SOURCE -Xcompiler -nostartfiles"

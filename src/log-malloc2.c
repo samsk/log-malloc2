@@ -99,9 +99,7 @@ static struct {
 	int memlog_fd;
 	int statm_fd;
         sig_atomic_t mem_used;
-#ifdef HAVE_MALLOC_USABLE_SIZE
 	sig_atomic_t mem_rused;
-#endif
 	struct {
 		sig_atomic_t malloc;
 		sig_atomic_t calloc;
@@ -110,6 +108,7 @@ static struct {
 		sig_atomic_t posix_memalign;
 		sig_atomic_t valloc;
 		sig_atomic_t free;
+		sig_atomic_t unrel_sum; /* unrealiable call count sum */
 	} stat;
 #ifdef HAVE_LIBPTHREAD
 	pthread_mutex_t loglock;
@@ -119,9 +118,7 @@ static struct {
 	1022,
 	-1,
 	0,
-#ifdef HAVE_MALLOC_USABLE_SIZE
 	0,
-#endif
 	{0, 0, 0, 0, 0},
 #ifdef HAVE_LIBPTHREAD
 	PTHREAD_MUTEX_INITIALIZER,
@@ -290,13 +287,16 @@ void *malloc(size_t size)
 		memruse = __sync_add_and_fetch(&g_ctx.mem_rused, mem->rsize);
 #endif
 	}
+#ifndef DISABLE_CALL_COUNTS
 	(void)__sync_fetch_and_add(&g_ctx.stat.malloc, 1);
+	g_ctx.stat.unrel_sum++;
+#endif
 
 	{
 		int s;
 		char buf[LOG_BUFSIZE];
 
-		s = snprintf(buf, sizeof(buf), "+ malloc %zu 0x%p [%u:%u]\n",
+		s = snprintf(buf, sizeof(buf), "+ malloc %zu %p [%u:%u]\n",
 			size, MEM_PTR(mem),
 			memuse, memruse);
 
@@ -325,14 +325,17 @@ void *calloc(size_t nmemb, size_t size)
 		memruse = __sync_add_and_fetch(&g_ctx.mem_rused, mem->rsize);
 #endif
 	}
+#ifndef DISABLE_CALL_COUNTS
 	(void)__sync_fetch_and_add(&g_ctx.stat.calloc, 1);
+	g_ctx.stat.unrel_sum++;
+#endif
 
 	{
 		int s;
 		char buf[LOG_BUFSIZE];
 
 		//getrusage(RUSAGE_SELF, &ruse);
-		s = snprintf(buf, sizeof(buf), "+ calloc %zu 0x%p [%u:%u] (%zu %zu)\n",
+		s = snprintf(buf, sizeof(buf), "+ calloc %zu %p [%u:%u] (%zu %zu)\n",
 			nmemb * size, MEM_PTR(mem),
 			memuse, memruse,
 			nmemb, size);
@@ -344,6 +347,7 @@ void *calloc(size_t nmemb, size_t size)
 
 void *realloc(void *ptr, size_t size)
 {
+	int foreign;
 	struct log_malloc_s *mem;
 	sig_atomic_t memuse = 0;
 	sig_atomic_t memruse = 0;
@@ -355,6 +359,9 @@ void *realloc(void *ptr, size_t size)
 
 	if(!DL_RESOLVE_CHECK(realloc))
 		return NULL;
+
+	/* check if we allocated it */
+	foreign = (mem->size != ~mem->cb);
 
 	mem = (ptr != NULL) ? MEM_HEAD(ptr) : NULL;
 	if((mem = real_realloc(mem, size + MEM_OFF)) != NULL)
@@ -369,13 +376,16 @@ void *realloc(void *ptr, size_t size)
 		memruse = __sync_add_and_fetch(&g_ctx.mem_rused, memrchange);
 #endif
 	}
+#ifndef DISABLE_CALL_COUNTS
 	(void)__sync_fetch_and_add(&g_ctx.stat.realloc, 1);
+	g_ctx.stat.unrel_sum++;
+#endif
 
 	{
 		int s;
 		char buf[LOG_BUFSIZE];
 
-		s = snprintf(buf, sizeof(buf), "+ realloc %d 0x%p 0x%p (%zu %zu) [%u:%u]\n",
+		s = snprintf(buf, sizeof(buf), "+ realloc %d %p %p (%zu %zu) [%u:%u]\n",
 			memchange, ptr,
 			MEM_PTR(mem), (mem ? mem->size : 0), size,
 			memuse, memruse);
@@ -417,13 +427,16 @@ void *memalign(size_t boundary, size_t size)
 		memruse = __sync_add_and_fetch(&g_ctx.mem_rused, mem->rsize);
 #endif
 	}
+#ifndef DISABLE_CALL_COUNTS
 	(void)__sync_fetch_and_add(&g_ctx.stat.memalign, 1);
+	g_ctx.stat.unrel_sum++;
+#endif
 
 	{
 		int s;
 		char buf[LOG_BUFSIZE];
 
-		s = snprintf(buf, sizeof(buf), "+ memalign %zu 0x%p (%zu) [%u:%u]\n",
+		s = snprintf(buf, sizeof(buf), "+ memalign %zu %p (%zu) [%u:%u]\n",
 			size, MEM_PTR(mem),
 			boundary, 
 			memuse, memruse);
@@ -456,13 +469,16 @@ int posix_memalign(void **memptr, size_t alignment, size_t size)
 		memruse = __sync_add_and_fetch(&g_ctx.mem_rused, mem->rsize);
 #endif
 	}
+#ifndef DISABLE_CALL_COUNTS
 	(void)__sync_fetch_and_add(&g_ctx.stat.posix_memalign, 1);
+	g_ctx.stat.unrel_sum++;
+#endif
 
 	{
 		int s;
 		char buf[LOG_BUFSIZE];
 
-		s = snprintf(buf, sizeof(buf), "+ posix_memalign %zu 0x%p (%zu %zu : %d) [%u:%u]\n",
+		s = snprintf(buf, sizeof(buf), "+ posix_memalign %zu %p (%zu %zu : %d) [%u:%u]\n",
 			size, MEM_PTR(mem),
 			alignment, size, ret,
 			memuse, memruse);
@@ -491,13 +507,16 @@ void *valloc(size_t size)
 		memruse = __sync_add_and_fetch(&g_ctx.mem_rused, mem->rsize);
 #endif
 	}
+#ifndef DISABLE_CALL_COUNTS
 	(void)__sync_fetch_and_add(&g_ctx.stat.valloc, 1);
+	g_ctx.stat.unrel_sum++;
+#endif
 
 	{
 		int s;
 		char buf[LOG_BUFSIZE];
 
-		s = snprintf(buf, sizeof(buf), "+ valloc %zu 0x%p [%u:%u]\n",
+		s = snprintf(buf, sizeof(buf), "+ valloc %zu %p [%u:%u]\n",
 			size, MEM_PTR(mem),
 			memuse, memruse);
 
@@ -520,11 +539,15 @@ void free(void *ptr)
 	/* check if we allocated it */
 	foreign = (mem->size != ~mem->cb);
 	memuse = __sync_sub_and_fetch(&g_ctx.mem_used, (foreign) ? 0: mem->size);
-	(void)__sync_fetch_and_add(&g_ctx.stat.free, 1);
 #ifdef HAVE_MALLOC_USABLE_SIZE
 	memruse = __sync_sub_and_fetch(&g_ctx.mem_rused, (foreign) ? 0 : mem->rsize);
 	if(foreign)
 		rsize = malloc_usable_size(ptr);
+#endif
+
+#ifndef DISABLE_CALL_COUNTS
+	(void)__sync_fetch_and_add(&g_ctx.stat.free, 1);
+	g_ctx.stat.unrel_sum++;
 #endif
 
 	{
@@ -533,12 +556,12 @@ void free(void *ptr)
 
 		//getrusage(RUSAGE_SELF, &ruse);
 		if(!foreign)
-			s = snprintf(buf, sizeof(buf), "+ free -%zu 0x%p [%u:%u]\n",
+			s = snprintf(buf, sizeof(buf), "+ free -%zu %p [%u:%u]\n",
 				mem->size, MEM_PTR(mem),
 				memuse, memruse);
 		else
 		{
-			s = snprintf(buf, sizeof(buf), "+ free -%zu 0x%p [%u:%u] !f\n",
+			s = snprintf(buf, sizeof(buf), "+ free -%zu %p [%u:%u] !f\n",
 				rsize, ptr,
 				memuse, memruse);
 		}

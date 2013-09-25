@@ -1,3 +1,10 @@
+0.2.3	2013-09-24
+
+BUGFIX
+
+	* fixed pointer formating
+	* automake tools update
+
 0.2.3	2012-03-29
 
 IMPROVEMENTS
