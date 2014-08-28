@@ -2,7 +2,7 @@
  * log-malloc2 
  *	Malloc logging library with backtrace and byte-exact memory tracking.
  * 
- * Author: Samuel Behan <_sam_(at)_dob_._sk> (C) 2011-2012
+ * Author: Samuel Behan <_samuel_._behan_(at)_dob_._sk> (C) 2011-2014
  *	   partialy based on log-malloc from Ivan Tikhonov
  *
  * License: GNU LGPLv3 (http://www.gnu.org/licenses/lgpl.html)
@@ -81,7 +81,7 @@ struct log_malloc_s {
 #ifdef HAVE_MALLOC_USABLE_SIZE
 	size_t rsize;		/* really allocated size */
 #endif
-	char   ptr[0] __attribute__ ((aligned (__BIGGEST_ALIGNMENT__)));	/* user memory begin */
+	char   ptr[0] __attribute__((__aligned__));	/* user memory begin */
 };
 #define MEM_OFF       (sizeof(struct log_malloc_s))
 
@@ -92,6 +92,10 @@ struct log_malloc_s {
 #ifdef HAVE_LIBPTHREAD
 #include <pthread.h>
 #endif 
+
+/* init constants */
+#define LIB_MALLOC_INIT_NULL 0xFAB321
+#define LIB_MALLOC_INIT_DONE 0x123FAB
 
 /* global context */
 static struct {
@@ -114,7 +118,7 @@ static struct {
 	pthread_mutex_t loglock;
 #endif
 } g_ctx = {
-	0,
+	LIB_MALLOC_INIT_NULL,
 	1022,
 	-1,
 	0,
@@ -153,7 +157,8 @@ static void *__init_lib()
 	char buf[LOG_BUFSIZE];
 
 	/* check already initialized */
-	if(!__sync_bool_compare_and_swap(&g_ctx.init_done, 0, 1))
+	if(!__sync_bool_compare_and_swap(&g_ctx.init_done,
+		LIB_MALLOC_INIT_NULL, LIB_MALLOC_INIT_DONE))
 		return NULL;
 
 	LOCK_INIT;
@@ -173,6 +178,8 @@ static void *__init_lib()
 	DL_RESOLVE(memalign);
 	DL_RESOLVE(posix_memalign);
 	DL_RESOLVE(valloc);
+
+	//TODO: call backtrace here to init itself
 
 	/* post-init status */
 	s = snprintf(buf, sizeof(buf), "+ INIT [%u:%u] malloc=%u calloc=%u realloc=%u memalign=%u/%u valloc=%u free=%u\n",

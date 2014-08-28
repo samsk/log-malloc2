@@ -63,7 +63,7 @@ Web		: http://devel.dob.sk/log-malloc2
 		Note: call to free are not backtraced, also free(NULL) calls are
 		  completely ignored.
 
-     Library allocates additional 8 or 12 bytes (2-3 * sizeof(size_t)) per every allocated
+     Library allocates additional 32 bytes (due to alignment) per every allocated
      memory. This is necessary to make byte-exact memory tracking possible.
      This memory is placed in front of allocated memory and stores size of allocated
      memory (1 x size_t) and check bits (1 x size_t) for allocated size number and
@@ -79,7 +79,7 @@ Web		: http://devel.dob.sk/log-malloc2
 
      Library uses malloc_usable_size() function (if available) to determine how much memory
      has been really allocated by libc. Allocated memory differs from requested memory, because
-     memory allocated usually allocates memory aligend to power of 2.
+     alocated memory blocks are usualy aligend to power of 2.
 
      Note: Allocated memory status (MEM-STATUS) might and will differ from
        numbers you will see it top/ps or statm data, because memory is allocated
@@ -94,7 +94,7 @@ Web		: http://devel.dob.sk/log-malloc2
 
      Logfile has following structure
 
-	+ FUNCTION MEM-CHANGE MEM-IN? MEM-OUT? [MEM-STATUS:MEM-STATUS-ALIGNED] (FUNCTION-PARAMS) #STATM-DATA
+	+ FUNCTION MEM-CHANGE MEM-IN? MEM-OUT? (FUNCTION-PARAMS) [MEM-STATUS:MEM-STATUS-ALIGNED] #STATM-DATA
 	BACKTRACE
 	...
 	...
