@@ -9,7 +9,8 @@
  *
  * Web:
  *	http://devel.dob.sk/log-malloc2
- *	http://sam.blog.dob.sk/category/devel/log-malloc2 (blog)
+ *	http://blog.dob.sk/category/devel/log-malloc2 (howto, tutorials)
+ *	https://github.com/samsk/log-malloc2 (git repo)
  *
  */
 
@@ -40,7 +41,10 @@
 #include "config.h"
 #endif
 
-#define _XOPEN_SOURCE 500
+/* needed for dlfcn.h */
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE	1
+#endif
 
 #include <stdio.h>
 #include <unistd.h>
@@ -54,14 +58,11 @@
 
 #include <dlfcn.h>
 
-/* handler declarations */
-static void *(*real_malloc)(size_t size)	= NULL;
-static void  (*real_free)(void *ptr)		= NULL;
-static void *(*real_realloc)(void *ptr, size_t size)	= NULL;
-static void *(*real_calloc)(size_t nmemb, size_t size)	= NULL;
-static void *(*real_memalign)(size_t boundary, size_t size)	= NULL;
-static int   (*real_posix_memalign)(void **memptr, size_t alignment, size_t size)	= NULL;
-static void *(*real_valloc)(size_t size)	= NULL;
+#include "log-malloc2.h"
+#include "log-malloc2_internal.h"
+
+/* config */
+#define LOG_BUFSIZE		128
 
 /**
   size       total program size (same as VmSize in /proc/[pid]/status)
@@ -72,9 +73,19 @@ static void *(*real_valloc)(size_t size)	= NULL;
   data       data + stack
   dt         dirty pages (unused in Linux 2.6)
 */
-const char* statm_path = "/proc/self/statm";
+static const char *g_statm_path = LOG_MALLOC_STATM_PATH;
+static const char *g_maps_path	= LOG_MALLOC_MAPS_PATH;
 
-/* memtracking */
+/* handler declarations */
+static void *(*real_malloc)(size_t size)	= NULL;
+static void  (*real_free)(void *ptr)		= NULL;
+static void *(*real_realloc)(void *ptr, size_t size)	= NULL;
+static void *(*real_calloc)(size_t nmemb, size_t size)	= NULL;
+static void *(*real_memalign)(size_t boundary, size_t size)	= NULL;
+static int   (*real_posix_memalign)(void **memptr, size_t alignment, size_t size)	= NULL;
+static void *(*real_valloc)(size_t size)	= NULL;
+
+/* memtracking struct */
 struct log_malloc_s {
 	size_t size;		/* allocation size */
 	size_t cb;		/* size check bits */
@@ -88,87 +99,62 @@ struct log_malloc_s {
 #define MEM_PTR(mem)  (mem != NULL ? ((void *)(((void *)(mem)) + MEM_OFF)) : NULL)
 #define MEM_HEAD(ptr) ((struct log_malloc_s *)(((void *)(ptr)) - MEM_OFF))
 
-/* pthreads support */
-#ifdef HAVE_LIBPTHREAD
-#include <pthread.h>
-#endif 
-
-/* init constants */
-#define LIB_MALLOC_INIT_NULL 0xFAB321
-#define LIB_MALLOC_INIT_DONE 0x123FAB
-
-/* global context */
-static struct {
-	sig_atomic_t init_done;
-	int memlog_fd;
-	int statm_fd;
-        sig_atomic_t mem_used;
-	sig_atomic_t mem_rused;
-	struct {
-		sig_atomic_t malloc;
-		sig_atomic_t calloc;
-		sig_atomic_t realloc;
-		sig_atomic_t memalign;
-		sig_atomic_t posix_memalign;
-		sig_atomic_t valloc;
-		sig_atomic_t free;
-		sig_atomic_t unrel_sum; /* unrealiable call count sum */
-	} stat;
-#ifdef HAVE_LIBPTHREAD
-	pthread_mutex_t loglock;
-#endif
-} g_ctx = {
-	LIB_MALLOC_INIT_NULL,
-	1022,
-	-1,
-	0,
-	0,
-	{0, 0, 0, 0, 0},
-#ifdef HAVE_LIBPTHREAD
-	PTHREAD_MUTEX_INITIALIZER,
-#endif
-};
-
-/* shortcuts */
-#ifdef HAVE_LIBPTHREAD
-//# define LOCK_INIT	(pthread_mutex_init(&g_ctx.loglock, 0))
-# define LOCK_INIT	1
-# define LOCK		(pthread_mutex_trylock(&g_ctx.loglock) == 0)
-# define UNLOCK		(pthread_mutex_unlock(&g_ctx.loglock))
-#else
-# define LOCK_INIT	1
-# define LOCK		1
-# define UNLOCK		0
-#endif
-
-/* config */
-#define LOG_BUFSIZE	128
-#define BACKTRACE_COUNT 7
-
 /* DL resolving */
 #define DL_RESOLVE(fn)	\
 	((!real_ ## fn) ? (real_ ## fn = dlsym(RTLD_NEXT, # fn)) : ((void *)0x1))
 #define DL_RESOLVE_CHECK(fn)	\
 	((!real_ ## fn) ? __init_lib() : ((void *)0x1))
 
-static void *__init_lib()
-{
-	int s, w;
-	char buf[LOG_BUFSIZE];
+/* data context */
+static log_malloc_ctx_t g_ctx = LOG_MALLOC_CTX_INIT;
 
+/*
+ *  INTERNAL API FUNCTIONS
+ */
+log_malloc_ctx_t *log_malloc_ctx_get(void)
+{
+	return &g_ctx;
+}
+
+/*
+ *  LIBRARY INIT/FINI FUNCTIONS
+ */
+static inline void copyfile(const char *head, size_t head_len,
+	const char *path, int outfd)
+{
+	int w;
+	int fd = -1;
+	char buf[BUFSIZ];
+	ssize_t len = 0;
+
+	// no warning here, it will be simply missing in log
+	if((fd = open(path, 0)) == -1)
+		return;
+
+	w = write(outfd, head, head_len);
+	// ignoring EINTR here, use SA_RESTART to fix if problem
+	while((len = read(fd, buf, sizeof(buf))) > 0)
+		w = write(outfd, buf, len);
+
+	close(fd);
+	return;
+}
+ 
+static void *__init_lib(void)
+{
 	/* check already initialized */
 	if(!__sync_bool_compare_and_swap(&g_ctx.init_done,
-		LIB_MALLOC_INIT_NULL, LIB_MALLOC_INIT_DONE))
+		LOG_MALLOC_INIT_NULL, LOG_MALLOC_INIT_DONE))
 		return NULL;
 
-	LOCK_INIT;
+	LOCK_INIT();
 
 	fprintf(stderr, "\n *** log-malloc trace-fd = %d *** \n\n",
 		g_ctx.memlog_fd);
 
 	/* open statm */
-	if(statm_path[0] != '\0' && (g_ctx.statm_fd = open(statm_path, 0)) == -1)
-		fprintf(stderr, "\n*** log-malloc: could not open %s\n\n", statm_path);
+	if(g_statm_path[0] != '\0' && (g_ctx.statm_fd = open(g_statm_path, 0)) == -1)
+		fprintf(stderr, "\n*** log-malloc: could not open %s\n\n", g_statm_path);
 
 	/* get real functions pointers */
 	DL_RESOLVE(malloc);
@@ -182,48 +168,95 @@ static void *__init_lib()
 	//TODO: call backtrace here to init itself
 
 	/* post-init status */
-	s = snprintf(buf, sizeof(buf), "+ INIT [%u:%u] malloc=%u calloc=%u realloc=%u memalign=%u/%u valloc=%u free=%u\n",
-			g_ctx.mem_used, g_ctx.mem_rused,
-			g_ctx.stat.malloc, g_ctx.stat.calloc, g_ctx.stat.realloc,
-			g_ctx.stat.memalign, g_ctx.stat.posix_memalign,
-			g_ctx.stat.valloc,
-			g_ctx.stat.free);
-	w = write(g_ctx.memlog_fd, buf, s);
+	if(!g_ctx.memlog_disabled)
+	{
+		int s, w;
+		char path[256];
+		char buf[LOG_BUFSIZE + sizeof(path)];
 
-	return (void *)0x1;
+		s = snprintf(buf, sizeof(buf), "# PID %u\n", getpid());
+		w = write(g_ctx.memlog_fd, buf, s);
+
+		s = readlink("/proc/self/exe", path, sizeof(path));
+		if(s > 1)
+		{
+			path[s] = '\0';
+			s = snprintf(buf, sizeof(buf), "# EXE %s\n", path);
+			w = write(g_ctx.memlog_fd, buf, s);
+		}
+
+		s = readlink("/proc/self/cwd", path, sizeof(path));
+		if(s > 1)
+		{
+			path[s] = '\0';
+			s = snprintf(buf, sizeof(buf), "# CWD %s\n", path);
+			w = write(g_ctx.memlog_fd, buf, s);
+		}
+
+		s = snprintf(buf, sizeof(buf), "+ INIT [%u:%u] malloc=%u calloc=%u realloc=%u memalign=%u/%u valloc=%u free=%u\n",
+				g_ctx.mem_used, g_ctx.mem_rused,
+				g_ctx.stat.malloc, g_ctx.stat.calloc, g_ctx.stat.realloc,
+				g_ctx.stat.memalign, g_ctx.stat.posix_memalign,
+				g_ctx.stat.valloc,
+				g_ctx.stat.free);
+		w = write(g_ctx.memlog_fd, buf, s);
+
+		/* auto-disable trace if file is not open  */
+		if(w == -1 && errno == EBADF)
+			g_ctx.memlog_disabled = true;
+	}
+
+	return (void *)0x01;
 }
 
-void __attribute__ ((constructor)) _init (void)
+static void __attribute__ ((constructor))log_malloc2_init(void)
 {
 	__init_lib();
   	return;
 }
 
-static void __fini_lib()
+static void __fini_lib(void)
 {
-	int s, w;
-	char buf[LOG_BUFSIZE];
+	/* check already finalized */
+	if(!__sync_bool_compare_and_swap(&g_ctx.init_done,
+		LOG_MALLOC_INIT_DONE, LOG_MALLOC_FINI_DONE))
+		return;
 
-	s = snprintf(buf, sizeof(buf), "+ FINI [%u:%u] malloc=%u calloc=%u realloc=%u memalign=%u/%u valloc=%u free=%u\n",
-			g_ctx.mem_used, g_ctx.mem_rused,
-			g_ctx.stat.malloc, g_ctx.stat.calloc, g_ctx.stat.realloc,
-			g_ctx.stat.memalign, g_ctx.stat.posix_memalign,
-			g_ctx.stat.valloc,
-			g_ctx.stat.free);
-	w = write(g_ctx.memlog_fd, buf, s);
+	if(!g_ctx.memlog_disabled)
+	{
+		int s, w;
+		char buf[LOG_BUFSIZE];
+		const char maps_head[] = "# FILE /proc/self/maps\n";
+
+		s = snprintf(buf, sizeof(buf), "+ FINI [%u:%u] malloc=%u calloc=%u realloc=%u memalign=%u/%u valloc=%u free=%u\n",
+				g_ctx.mem_used, g_ctx.mem_rused,
+				g_ctx.stat.malloc, g_ctx.stat.calloc, g_ctx.stat.realloc,
+				g_ctx.stat.memalign, g_ctx.stat.posix_memalign,
+				g_ctx.stat.valloc,
+				g_ctx.stat.free);
+		w = write(g_ctx.memlog_fd, buf, s);
+
+		/* maps out here, because dynamic libs could by mapped during run */
+		copyfile(maps_head, sizeof(maps_head) - 1, g_maps_path, g_ctx.memlog_fd);
+	}
 
 	if(g_ctx.statm_fd != -1)
 		close(g_ctx.statm_fd);
+	g_ctx.statm_fd = -1;
 
 	return;
 }
 
-void __attribute__ ((constructor)) _fini (void)
+static void __attribute__ ((destructor))log_malloc2_fini(void)
 {
 	__fini_lib();
   	return;
 }
 
+
+/*
+ *  INTERNAL FUNCTIONS
+ */
 static inline void log_trace(char *str, size_t len, size_t max_size, int print_stack)
 {
 	int w;
@@ -233,12 +266,13 @@ static inline void log_trace(char *str, size_t len, size_t max_size, int print_s
 	if(!in_trace)
 	{
 #ifdef HAVE_BACKTRACE
-		int nptrs;
-		void *buffer[BACKTRACE_COUNT + 1];
+		int nptrs = 0;
+		void *buffer[LOG_MALLOC_BACKTRACE_COUNT + 1];
 
 		in_trace = 1;	/* backtrace may allocate memory !*/
 
-		nptrs = backtrace(buffer, BACKTRACE_COUNT);
+		if(print_stack)
+			nptrs = backtrace(buffer, LOG_MALLOC_BACKTRACE_COUNT);
 #endif
 
 		if(g_ctx.statm_fd != -1 && (max_size - len) > 2)
@@ -251,11 +285,11 @@ static inline void log_trace(char *str, size_t len, size_t max_size, int print_s
 
 		/* try synced write */
 #if defined(HAVE_BACKTRACE) && defined(HAVE_BACKTRACE_SYMBOLS_FD)
-		if(nptrs && print_stack && LOCK)
+		if(nptrs && print_stack && LOCK(g_ctx.loglock))
 		{
 			w = write(g_ctx.memlog_fd, str, len);
 			backtrace_symbols_fd(&buffer[1], nptrs, g_ctx.memlog_fd);
-			in_trace = UNLOCK;	/* failed unlock will not re-enable synced tracing */
+			in_trace = UNLOCK(g_ctx.loglock); /* failed unlock will not re-enable synced tracing */
 		}
 		else
 #endif
@@ -274,6 +308,10 @@ static inline void log_trace(char *str, size_t len, size_t max_size, int print_s
 	return;
 }
 
+
+/*
+ *  LIBRARY FUNCTIONS
+ */
 void *malloc(size_t size)
 {
 	struct log_malloc_s *mem;
@@ -299,6 +337,7 @@ void *malloc(size_t size)
 	g_ctx.stat.unrel_sum++;
 #endif
 
+	if(!g_ctx.memlog_disabled)
 	{
 		int s;
 		char buf[LOG_BUFSIZE];
@@ -317,13 +356,15 @@ void *calloc(size_t nmemb, size_t size)
 	struct log_malloc_s *mem;
 	sig_atomic_t memuse;
 	sig_atomic_t memruse = 0;
+	size_t calloc_size = 0;
 
 	if(!DL_RESOLVE_CHECK(calloc))
 		return NULL;
 
-	if((mem = real_calloc(1, (nmemb * size) + MEM_OFF)) != NULL)
+	calloc_size = (nmemb * size);	//FIXME: what about check for overflow here ?
+	if((mem = real_calloc(1, calloc_size + MEM_OFF)) != NULL)
 	{
-		mem->size = nmemb * size;
+		mem->size = calloc_size;
 		mem->cb = ~mem->size;
 		memuse = __sync_add_and_fetch(&g_ctx.mem_used, mem->size);
 
@@ -337,6 +378,7 @@ void *calloc(size_t nmemb, size_t size)
 	g_ctx.stat.unrel_sum++;
 #endif
 
+	if(!g_ctx.memlog_disabled)
 	{
 		int s;
 		char buf[LOG_BUFSIZE];
@@ -354,7 +396,6 @@ void *calloc(size_t nmemb, size_t size)
 
 void *realloc(void *ptr, size_t size)
 {
-	int foreign;
 	struct log_malloc_s *mem;
 	sig_atomic_t memuse = 0;
 	sig_atomic_t memruse = 0;
@@ -367,19 +408,24 @@ void *realloc(void *ptr, size_t size)
 	if(!DL_RESOLVE_CHECK(realloc))
 		return NULL;
 
-	/* check if we allocated it */
-	foreign = (mem->size != ~mem->cb);
-
 	mem = (ptr != NULL) ? MEM_HEAD(ptr) : NULL;
+
+	//FIXME: not handling foreign memory here (seems not needed)
+	if(mem && (mem->size != ~mem->cb))
+	{
+		assert(mem->size != ~mem->cb);
+		return NULL;
+	}
+
 	if((mem = real_realloc(mem, size + MEM_OFF)) != NULL)
 	{
-		memchange = ptr ? size - mem->size : size;
+		memchange = (ptr) ? size - mem->size : size;
 		memuse = __sync_add_and_fetch(&g_ctx.mem_used, memchange);
 
 #ifdef HAVE_MALLOC_USABLE_SIZE
 		rsize = malloc_usable_size(mem);
 
-		memrchange = ptr ? rsize - mem->rsize : rsize;
+		memrchange = (ptr) ? rsize - mem->rsize : rsize;
 		memruse = __sync_add_and_fetch(&g_ctx.mem_rused, memrchange);
 #endif
 	}
@@ -388,6 +434,7 @@ void *realloc(void *ptr, size_t size)
 	g_ctx.stat.unrel_sum++;
 #endif
 
+	if(!g_ctx.memlog_disabled)
 	{
 		int s;
 		char buf[LOG_BUFSIZE];
@@ -421,7 +468,7 @@ void *memalign(size_t boundary, size_t size)
 	if(!DL_RESOLVE_CHECK(memalign))
 		return NULL;
 
-	if(boundary>MEM_OFF)
+	if(boundary > MEM_OFF)
 		return NULL;
 
 	if((mem = real_memalign(boundary, size + MEM_OFF)) != NULL)
@@ -439,6 +486,7 @@ void *memalign(size_t boundary, size_t size)
 	g_ctx.stat.unrel_sum++;
 #endif
 
+	if(!g_ctx.memlog_disabled)
 	{
 		int s;
 		char buf[LOG_BUFSIZE];
@@ -463,7 +511,7 @@ int posix_memalign(void **memptr, size_t alignment, size_t size)
 	if(!DL_RESOLVE_CHECK(posix_memalign))
 		return ENOMEM;
 
-	if(alignment>MEM_OFF)
+	if(alignment > MEM_OFF)
 		return ENOMEM;
 
 	if((ret = real_posix_memalign((void **)&mem, alignment, size + MEM_OFF)) == 0)
@@ -481,6 +529,7 @@ int posix_memalign(void **memptr, size_t alignment, size_t size)
 	g_ctx.stat.unrel_sum++;
 #endif
 
+	if(!g_ctx.memlog_disabled)
 	{
 		int s;
 		char buf[LOG_BUFSIZE];
@@ -519,6 +568,7 @@ void *valloc(size_t size)
 	g_ctx.stat.unrel_sum++;
 #endif
 
+	if(!g_ctx.memlog_disabled)
 	{
 		int s;
 		char buf[LOG_BUFSIZE];
@@ -557,15 +607,18 @@ void free(void *ptr)
 	g_ctx.stat.unrel_sum++;
 #endif
 
+	if(!g_ctx.memlog_disabled)
 	{
 		int s;
 		char buf[LOG_BUFSIZE];
 
 		//getrusage(RUSAGE_SELF, &ruse);
 		if(!foreign)
+		{
 			s = snprintf(buf, sizeof(buf), "+ free -%zu %p [%u:%u]\n",
 				mem->size, MEM_PTR(mem),
 				memuse, memruse);
+		}
 		else
 		{
 			s = snprintf(buf, sizeof(buf), "+ free -%zu %p [%u:%u] !f\n",

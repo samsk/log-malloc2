@@ -1,4 +1,20 @@
 
+0.3.0 Sat Nov  1 23:42:25 CET 2014
+	- code cleanup
+	- using costructor/destructor instead of init/fini
+	- improved protection against multiple inits
+	- reduced exported symbols
+	- added /proc/self/maps printing (to make addr2line mapping easier)
+	- remove that yummy segfault in realloc that has been till now optimized away by gcc
+	- implemented few API functions for working with library directly
+	- added macros that make leaked memory hunting a bit easier
+	- autodisabling trace if trace-fd not opened for writing
+	- added backtrace2symbols translation scripts
+	- added log-malloc trace file analysis scripts
+	- provide pkg-config
+	- added script for easier log-malloc trace start
+	- etc..
+
 0.2.4 Wed Sep 24 22:15:31 CEST 2013
 	- removed dummy prefix 0x from %p printouts (I'm pretty blind - I've fixed
 		it 'lightyears' ago in some private copy and not pushed it to repo ;-)
