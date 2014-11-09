@@ -26,14 +26,14 @@ OR
 
 #Helper scripts
 
-- ```backtrace2line```
+- `backtrace2line`
  - Script to automatically convert backtrace in files and line numbers.
  - Can also deal with [ASLR](https://en.wikipedia.org/wiki/Address_space_layout_randomization) randomized addresses.
 
-- ```log-malloc-findleak```
+- `log-malloc-findleak`
  - Script to discover possible program memory leaks from trace file
 
-- ```log-malloc-trackusage```
+- `log-malloc-trackusage`
  - Script to track program memory usage over time.
 
 
@@ -75,7 +75,7 @@ OR
 # Author
 
 - ***Samuel Behan***
- - **contact**: samuel*(dot)*behan*(at)*dob*(dot)*sk
+ - **contact**: samuel(dot)behan(at)dob(dot)sk
  - **homepage**: [http://dob.sk](http://dob.sk?u=github)
  - **projects**: [http://devel.dob.sk](http://devel.dob.sk?u=github)
 
@@ -170,9 +170,9 @@ OR
     SUSPECTED 1 LEAKS:
      0x7f4688a04000 leaked 100 bytes (0.10 KiB) allocated by malloc (line: 1)
            FUNCTION             FILE                      SYMBOL
-           main                 examples/leak-02.c:10     ./examples/leak-02(main+0x40)[0x7f4687a6fb50]
+           main                 examples/leak-01.c:10     ./examples/leak-01(main+0x40)[0x7f4687a6fb50]
                                                           /lib64/libc.so.6(__libc_start_main+0x11b)[0x7f46872ae1cb]
-           _start               ??:?                      ./examples/leak-02(+0x9f9)[0x7f4687a6f9f9]
+           _start               ??:?                      ./examples/leak-01(+0x9f9)[0x7f4687a6f9f9]
                                                           [0x0]
 
 
