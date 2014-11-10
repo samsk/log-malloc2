@@ -25,8 +25,6 @@ LT_INIT([disable-static])
 
 AC_CHECK_HEADERS([fcntl.h stdint.h stdlib.h sys/time.h unistd.h stdbool.h])
 
-AC_CHECK_HEADER_STDBOOL
-
 AC_CHECK_FUNCS([ pread backtrace backtrace_symbols_fd ])
 
 AC_CHECK_LIB(dl, dlsym, , [

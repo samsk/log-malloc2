@@ -1,5 +1,5 @@
 
-0.3.0 Sat Nov  1 23:42:25 CET 2014
+0.3.0 Mon Nov 10 00:00:00 CET 2014
 	- code cleanup
 	- using costructor/destructor instead of init/fini
 	- improved protection against multiple inits
@@ -13,6 +13,7 @@
 	- added log-malloc trace file analysis scripts
 	- provide pkg-config
 	- added script for easier log-malloc trace start
+	- clang warning fixed
 	- etc..
 
 0.2.4 Wed Sep 24 22:15:31 CEST 2013

@@ -34,3 +34,5 @@ dist_noinst_SCRIPTS = autogen.sh
 ## examples
 dist_noinst_DATA = examples/Makefile examples/*.c
 
+## test
+.PHONY: test

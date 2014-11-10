@@ -55,6 +55,7 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <errno.h>
+#include <malloc.h>
 
 #include <dlfcn.h>
 
@@ -101,7 +102,7 @@ struct log_malloc_s {
 
 /* DL resolving */
 #define DL_RESOLVE(fn)	\
-	((!real_ ## fn) ? (real_ ## fn = dlsym(RTLD_NEXT, # fn)) : ((void *)0x1))
+	((!real_ ## fn) ? (real_ ## fn = dlsym(RTLD_NEXT, # fn)) : (real_ ## fn = ((void *)0x1)))
 #define DL_RESOLVE_CHECK(fn)	\
 	((!real_ ## fn) ? __init_lib() : ((void *)0x1))
 

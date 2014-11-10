@@ -13,7 +13,7 @@ LDLIBS_API = -L../.libs -llog-malloc2 -Wl,-rpath,$(realpath $(CWD)/../.libs)
 endif
 
 
-PROGRAMS = leak-01 leak-02 api-01
+PROGRAMS = leak-01 leak-02 api-01 segv-01
 
 # make tar
 .PHONY: all
@@ -23,6 +23,9 @@ api-%: api-%.c
 	$(CC) $(CFLAGS) $(CFLAGS2) $(CFLAGS_API) $(LDLIBS_API) $^ -o $@
 
 leak-%: leak-%.c
+	$(CC) $(CFLAGS) $(CFLAGS2) $^ -o $@
+
+segv-%: segv-%.c
 	$(CC) $(CFLAGS) $(CFLAGS2) $^ -o $@
 
 clean:

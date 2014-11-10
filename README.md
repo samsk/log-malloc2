@@ -4,6 +4,8 @@ log-malloc2
 *log-malloc2* is **pre-loadable** library tracking all memory allocations of a program. It
 produces simple text trace output, that makes it easy to find leaks and also identify their origin.
 
+[![Build Status](https://travis-ci.org/samsk/log-malloc2.svg)](https://travis-ci.org/samsk/log-malloc2)
+
 #Features
 
 - logging to file descriptor 1022 (if opened)

@@ -2,7 +2,7 @@
 ################################################################################
 
 Program : log-malloc2 (library)
-Version	: 0.2.4
+Version	: 0.3.0
 Purpose	: Malloc logging library with backtrace and byte-exact memory
 		tracking.
 License	: GNU GPL v3 (see file COPYING)
