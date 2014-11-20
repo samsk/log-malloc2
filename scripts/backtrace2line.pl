@@ -38,7 +38,7 @@ exit(main(@ARGV)) if(!caller());
 # INTERNAL FUNCTIONS
 #
 
-sub _readFile($)
+sub readFile($)
 {
 	my ($fd) = @_;
 
@@ -47,9 +47,9 @@ sub _readFile($)
 	{
 		chomp($line);
 
-		# read till line with only '.' if reading from FILE handle
+		# read till line with only '.' or beginning with '='
 		last
-			if($line eq ".");
+			if($line =~ /^(\.$|=)/o);
 
 		push(@arr, $line);
 	}
@@ -88,7 +88,7 @@ sub read_mapsFile($$)
 	return ()
 		if(!$mapsFile || (!open($fd, $mapsFile)));
 
-	my @maps = _readFile($fd);
+	my @maps = readFile($fd);
 	close($fd);
 
 	return @maps;
@@ -386,13 +386,13 @@ sub main(@)
 			if($symFile && $symbols[0] ne "-" && !open($fd, $symbols[0]));
 
 		# read symbols
-		@symbols = _readFile($fd);
+		@symbols = readFile($fd);
 
 		# read maps
 		if(!$mapsFile || ($mapsFile && $mapsFile eq "-"))
 		{
 			$mapsFile = [];
-			@$mapsFile = _readFile($fd);
+			@$mapsFile = readFile($fd);
 		}
 
 		close($fd);
@@ -457,8 +457,8 @@ NOTE: This script can be also used as perl module.
 =item I<BACKTRACE-FILE>
 
 Path to backtrace file. This file must contain symbols (one per line) and I<might> contain also content of 
-the maps file, divided by line with single comma (see B<EXAMPLES>). The same applies if reading backtrace
-from stdin.
+the maps file, divided by line with single comma (see B<EXAMPLES>) or line begging with '=' character.
+The same applies if reading backtrace from stdin.
 
 =item I<SYMBOL>
 

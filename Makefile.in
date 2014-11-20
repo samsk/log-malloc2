@@ -280,7 +280,8 @@ ACLOCAL_AMFLAGS = ${ACLOCAL_FLAGS}
 lib_LTLIBRARIES = liblog-malloc2.la
 liblog_malloc2_la_LDFLAGS = -version-info $(LOG_MALLOC2_SO_VERSION)
 liblog_malloc2_la_SOURCES = src/log-malloc2.c src/log-malloc2_api.c src/log-malloc2_internal.h
-pkginclude_HEADERS = src/log-malloc2.h
+AM_CPPFLAGS = -I$(top_srcdir)/include
+pkginclude_HEADERS = include/log-malloc2.h include/log-malloc2_util.h
 dist_libexec_SCRIPTS = scripts/backtrace2line.pl scripts/log-malloc.pl \
                 scripts/log-malloc-findleak.pl scripts/log-malloc-trackusage.pl
 

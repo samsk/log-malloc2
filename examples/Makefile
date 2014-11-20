@@ -1,14 +1,14 @@
 #
 # Makefile 4 examples
 
-CFLAGS2 = -Wall -rdynamic -fPIC -g
+CFLAGS2 = -Wall -rdynamic -fPIC -g -I../include
 
 ifeq ($(USE_PKGCONFIG),1)
 CFLAGS_API = $(shell pkg-config --cflags log-malloc2)
 LDLIBS_API = $(shell pkg-config --libs log-malloc2)
 else
 CWD := $(shell pwd)
-CFLAGS_API = -I../src
+CFLAGS_API = -I../include
 LDLIBS_API = -L../.libs -llog-malloc2 -Wl,-rpath,$(realpath $(CWD)/../.libs)
 endif
 

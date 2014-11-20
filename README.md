@@ -42,7 +42,7 @@ OR
 
 # C API
 
-- ``` size_t log_malloc_get_usage(void)```
+- ```size_t log_malloc_get_usage(void)```
  - Get actual program memory usage in bytes
 
 - ```void log_malloc_trace_enable(void)```
@@ -73,6 +73,17 @@ OR
 
 - ```LOG_MALLOC_NDEBUG``` [MACRO]
  - If defined, above macros will generate no code.
+
+
+# C INLINE API
+
+- ```void log_malloc_backtrace_init(void)```
+ - Pre-initializes backtrace() function, to avoid later memory alocations. Use of this function is optional.
+
+- ```ssize_t log_malloc_backtrace(int fd)```
+ - Generate current backtrace including process memory map (/proc/self/maps) to make backtrace symbol conversion easier.
+ - Generated output can be directly pasted to _backtrace2line_ script.
+
 
 # Author
 

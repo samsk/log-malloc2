@@ -90,7 +90,7 @@ Web	: http://devel.dob.sk/log-malloc2
 - C API -
 ---------
 
-     log-malloc2 provides also simple C API functions (ideal for testing) that can be used
+     log-malloc2.h provides simple C API functions (ideal for testing) that can be used
      if it is directly linked to a program at compile/link time.
      Warning: Such a usage is not recommended in production environment! Memory tracking
          and call counting use memory bariers, that may degrade application performance.
@@ -134,7 +134,28 @@ Web	: http://devel.dob.sk/log-malloc2
 	given number of LOG_MALLOC_SAVE() iterations.
 
      LOG_MALLOC_NDEBUG [MACRO]
+
         If defined, above macros will generate no code.
+
+
+----------------
+- C INLINE API -
+----------------
+
+     log-malloc2_util.h provides for convenience, few fully inlined functions, that
+     can be used without linking library itself.
+
+     void log_malloc_backtrace_init(void)
+
+	Pre-initializes backtrace() function, to avoid later memory alocations.
+	Use of this function is optional.
+
+    ssize_t log_malloc_backtrace(int fd)
+
+	Generate current backtrace including process memory map (/proc/self/maps) to
+	make backtrace symbol conversion easier. Generated output can be directly
+	pasted to backtrace2line script.
+
 
 --------------------
 - PERFORMANCE TIPS -
