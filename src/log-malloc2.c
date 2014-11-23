@@ -150,9 +150,6 @@ static void *__init_lib(void)
 
 	LOCK_INIT();
 
-	fprintf(stderr, "\n *** log-malloc trace-fd = %d *** \n\n",
-		g_ctx.memlog_fd);
-
 	/* open statm */
 	if(g_statm_path[0] != '\0' && (g_ctx.statm_fd = open(g_statm_path, 0)) == -1)
 		fprintf(stderr, "\n*** log-malloc: could not open %s\n\n", g_statm_path);
@@ -205,6 +202,9 @@ static void *__init_lib(void)
 		/* auto-disable trace if file is not open  */
 		if(w == -1 && errno == EBADF)
 			g_ctx.memlog_disabled = true;
+
+		fprintf(stderr, "\n *** log-malloc trace-fd = %d *** \n\n",
+			g_ctx.memlog_fd);
 	}
 
 	return (void *)0x01;

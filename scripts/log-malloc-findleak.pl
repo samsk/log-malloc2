@@ -306,7 +306,7 @@ log-malloc-findleak [ OPTIONS ] I<TRACE-FILE>
 This script analyzes input trace file (or part of it) produced by log-malloc2 library, and prints out
 suspected memory leaks along with translated backtrace path to code allocating that memory.
 
-NOTE: This script can be also usesd as perl module.
+NOTE: This script can be also used as perl module.
 
 =head1 ARGUMENTS
 

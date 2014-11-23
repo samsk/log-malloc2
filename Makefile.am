@@ -23,7 +23,8 @@ dist_libexec_SCRIPTS = scripts/backtrace2line.pl scripts/log-malloc.pl \
 libexec_SCRIPTS = scripts/log-malloc.pm
 
 install-exec-hook:
-	for i in $(dist_libexec_SCRIPTS); do bn=`basename $${i}`; $(LN_S) -f "${libexecdir}/$${bn}" "$(bindir)/$${bn%.pl}"; done;
+	for i in $(dist_libexec_SCRIPTS); do bn=`basename $${i}`;\
+		$(LN_S) -f "${libexecdir}/$${bn}" "$(bindir)/$${bn%.pl}"; done;
 
 ## pkconfig
 pkgconfigdir = $(libdir)/pkgconfig
@@ -34,6 +35,14 @@ dist_noinst_SCRIPTS = autogen.sh
 
 ## examples
 dist_noinst_DATA = examples/Makefile examples/*.c
+
+# manpages
+scripts_man_MANS = $(dist_libexec_SCRIPTS:.pl=.1)
+man_MANS = $(scripts_man_MANS)
+%.1: %.pl
+	pod2man --release='$(PACKAGE_VERSION)' --center='$(PACKAGE_NAME)' \
+		--section=1 $< > $@
+CLEANFILES = $(man_MANS)
 
 ## test
 .PHONY: test
