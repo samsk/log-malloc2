@@ -23,7 +23,7 @@ use Data::Dumper;
 use File::Basename;
 
 # VERSION
-our $VERSION = "0.3";
+our $VERSION = "0.4";
 
 my $LIBEXECDIR;
 BEGIN {	$LIBEXECDIR = Cwd::abs_path(dirname(readlink(__FILE__) || __FILE__)); };
@@ -80,17 +80,17 @@ sub main(@)
 			"<>"			=> sub { unshift(@ARGV, "$_[0]"); last; },
 			"h|?|help"		=> \$help,
 			"man"			=> \$man,
-			) || pod2usage( -verbose => 0, -exitval => 1);
+			) || pod2usage( -verbose => 0, -exitval => 1 );
 	};
 	@argv = @ARGV;
 
-	pod2usage( -verbose => 1)
+	pod2usage( -verbose => 1 )
 		if($help);
-	pod2usage( -verbose => 3)
+	pod2usage( -verbose => 3 )
 		if($man);
 
-	pod2usage( -msg => "$0: command to execute is required !", -verbose => 1,
-		-exitval => 1)
+	pod2usage( -msg => "$0: command to execute is required !",
+		-verbose => 0, -exitval => 1 )
 		if(!@ARGV);
 
 	# find LD_PRELOAD library path

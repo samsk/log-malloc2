@@ -6,10 +6,11 @@ produces simple text trace output, that makes it easy to find leaks and also ide
 
 [![Build Status](https://travis-ci.org/samsk/log-malloc2.svg)](https://travis-ci.org/samsk/log-malloc2)
 
+
 #Features
 
 - logging to file descriptor 1022 (if opened)
-- call stack **backtrace** (using GNU backtrace() if available)
+- call stack **backtrace** (via GNU backtrace() or libunwind)
 - **requested memory tracking** (byte-exact)
 - allocated memory tracking (byte-exact - using malloc_usable_size())
 - process memory status tracking (from /proc/self/statm)
@@ -26,6 +27,7 @@ OR
 
 `LD_PRELOAD=./liblog-malloc2.so command args ... 1022>/tmp/program.log`
 
+
 #Helper scripts
 
 - `backtrace2line`
@@ -37,7 +39,6 @@ OR
 
 - `log-malloc-trackusage`
  - Script to track program memory usage over time.
-
 
 
 # C API
@@ -92,15 +93,18 @@ OR
  - **homepage**: [http://dob.sk](http://dob.sk?u=github)
  - **projects**: [http://devel.dob.sk](http://devel.dob.sk?u=github)
 
+
 # Licensing
 
 * [LGPLv3](https://www.gnu.org/licenses/lgpl.html) for C code (library)
 * [GPLv3](https://www.gnu.org/licenses/gpl.html) for Perl code (scripts)
 
+
 # See Also
 
 * More/Detailed info in project [README](README)
 * Project home: [http://devel.dob.sk/log-malloc2](http://devel.dob.sk/log-malloc2?u=github)
+
 
 #Examples
 
@@ -175,7 +179,6 @@ OR
     7fffb5471000-7fffb5493000 rw-p 00000000 00:00 0                          [stack]
     7fffb54cf000-7fffb54d1000 r-xp 00000000 00:00 0                          [vdso]
     ffffffffff600000-ffffffffff601000 r-xp 00000000 00:00 0                  [vsyscall]
-
 
 ###Example leak
 

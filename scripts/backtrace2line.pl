@@ -23,10 +23,11 @@ use Data::Dumper;
 use File::Basename;
 
 # VERSION
-our $VERSION = '0.3';
+our $VERSION = '0.4';
 
 # CONFIGS
 our $VERBOSE = 0;
+our $WARNING = 0;	# set to -1 to disable globally
 my @ADDR2LINE = ("addr2line", "-C");
 my $LINUX_ALSR_CONFIG = "/proc/sys/kernel/randomize_va_space";
 
@@ -37,6 +38,14 @@ exit(main(@ARGV)) if(!caller());
 #
 # INTERNAL FUNCTIONS
 #
+
+sub addr2num($)
+{
+	my ($addr) = @_;
+
+	no warnings 'portable';
+	return hex($addr);
+}
 
 sub readFile($)
 {
@@ -110,12 +119,21 @@ sub get_libmap(@)
 			if($perms !~ /x/o || !$path || $path =~ /^\[\w+\]$/o);
 
 		# unhex
-		$addr_from = hex($addr_from);
+		$addr_from = addr2num($addr_from);
+		$addr_to = addr2num($addr_to);
 
 		my $libname = basename($path);
 		$libs{$libname} = $addr_from;
 		$libs{'-' . $libname} = $path;
+
+		$libs{$addr_from} = $addr_to;
+		$libs{$addr_to} = $path;
 	}
+	# all-in-one hash (not very effective, but who cares here :)
+	#	basename	=> addr_from
+	#	-basename	=> absolute-path
+	#	addr_from	=> addr_to
+	#	addr_to		=> absolute-path
 	return %libs;
 }
 
@@ -128,6 +146,27 @@ sub get_wd($$)
 
 	my $lnk = sprintf("/proc/%d/cwd", $pid);
 	return readlink($lnk);
+}
+
+sub addr2libname(\%$)
+{
+	my ($libmap, $addr) = @_;
+
+	foreach my $addr_from (keys(%$libmap))
+	{
+		my $addr_to = $libmap->{$addr_from};
+
+		# dummy format, filter it
+		next
+			if($addr_from !~ /^[[:digit:]]+$/o || $addr_to !~ /^[[:digit:]]+$/o);
+
+		# check range
+		next
+			if($addr <= $addr_from || $addr >= $addr_to);
+		
+		return ($libmap->{$addr_to}, $addr_from);
+	}
+	return undef;
 }
 
 #
@@ -202,67 +241,82 @@ sub process($$$@)
 		chomp($sym);
 		push(@data, $sym);	# as fallback return input symbol
 
-		#return wantarray ? (undef, "failed to parse symbol '$sym'") : undef
 		next if($sym eq "[0x0]");
 		verbose(1, "SYM_PARSE_FAILED: $sym\n"), next
 			if(!($sym =~ /^(.*?)\((.*?)\)?\[(.*?)\]$/o));
 		my ($exe, $offset, $addr) = ($1, $2, $3);
 
-		my $exeBN = basename($exe);
-
-		# try to find absolute path via maps file
-		$exe = $libs{'-' . $exeBN}
-			if(exists($libs{'-' . $exeBN}));
-
-		# not asolute path yet (try it with work-dir)
-		my $exeOld = $exe;
-		if($cwd && $exe !~ /^\//o)
-		{
-			my $exe2 = $cwd . '/' . $exe;
-			$exe2 = Cwd::abs_path($exe2);
-
-			verbose(1, "EXE_ABSPATH_FAILED: $exe\n"), next
-				if(!$exe2 || ! -e $exe2);
-			$exe = $exe2;
-		}
-
-		#return wantarray ? (undef, "executable '$exeOld' is not a plain file") : undef
-		verbose(1, "EXE_NOT_FOUND: $exeOld\n"), next
-			if(!$exe || !-f $exe);
-
-		# need real file not symlink
-		$exeOld = $exe;
-		while(defined($exe) && -l $exe && $retry++ < 10)
-		{
-			my $dir = dirname($exe);
-
-			$exeOld = $exe;
-			$exe = readlink($exe);
-
-			$exe = $dir . '/' . $exe
-				if($dir && $exe && $exe !~ /^\//o);
-		}
-
-		#return wantarray ? (undef, "failed to read symlink '$exeOld' - $!") : undef
-		verbose(1, "EXE_SYMLINK_FOLLOW_FAILED: $exeOld\n"), next
-			if(!defined($exe));
-
-		# get absolute path
-		$exe = Cwd::abs_path($exe);
-
-		#return wantarray ? (undef, "executable '$exe' is not a plain file") : undef
-		verbose(1, "EXE_NOT_FOUND: $exe\n"), next
-			if(!-f $exe);
-
-		# library offset via basename
-		$exeBN = basename($exe);
 		my $libOffset = 0;
-		$libOffset = $libs{$exeBN}
-			if(exists($libs{$exeBN}));
+		my $addrNum = addr2num($addr);
+
+		if($exe ne '*')
+		{
+			my $exeBN = basename($exe);
+
+			# try to find absolute path via maps file
+			$exe = $libs{'-' . $exeBN}
+				if(exists($libs{'-' . $exeBN}));
+
+			# not asolute path yet (try it with work-dir)
+			my $exeOld = $exe;
+			if($cwd && $exe !~ /^\//o)
+			{
+				my $exe2 = $cwd . '/' . $exe;
+				$exe2 = Cwd::abs_path($exe2);
+
+				verbose(1, "EXE_ABSPATH_FAILED: $exe\n"), next
+					if(!$exe2 || ! -e $exe2);
+				$exe = $exe2;
+			}
+
+			verbose(1, "EXE_NOT_FOUND: $exeOld\n"), next
+				if(!$exe || !-f $exe);
+
+			# need real file not symlink
+			$exeOld = $exe;
+			while(defined($exe) && -l $exe && $retry++ < 10)
+			{
+				my $dir = dirname($exe);
+
+				$exeOld = $exe;
+				$exe = readlink($exe);
+
+				$exe = $dir . '/' . $exe
+					if($dir && $exe && $exe !~ /^\//o);
+			}
+
+			verbose(1, "EXE_SYMLINK_FOLLOW_FAILED: $exeOld\n"), next
+				if(!defined($exe));
+
+			# get absolute path
+			$exe = Cwd::abs_path($exe);
+
+			verbose(1, "EXE_NOT_FOUND: $exe\n"), next
+				if(!-f $exe);
+
+			# library offset via basename
+			$exeBN = basename($exe);
+			$libOffset = $libs{$exeBN}
+				if(exists($libs{$exeBN}));
+		}
+		else
+		{
+			if($WARNING == 0 && !%libs)
+			{
+				warn("WARNING: incomplete SYMBOL (without libname), but no --pid or --maps-file provided!\n");
+				$WARNING = 1;
+			}
+		
+			($exe, $libOffset) = addr2libname(%libs, $addrNum);
+
+			verbose(1, "ADDR_NOT_MAPPED: $addr\n"), next
+				if(!$exe);
+
+			verbose(1, "EXE_NOT_FOUND: $exe\n"), next
+				if(!-f $exe);
+		}
 
 		# addr offset
-		no warnings 'portable';
-		my $addrNum = hex($addr);
 		my $addrReal = $addrNum - $libOffset;
 		my $addrHex = sprintf("0x%02x", $addrReal);
 
@@ -367,13 +421,12 @@ sub main(@)
 		"v|verbose"	=> \$VERBOSE,
 		"h|?|help"	=> \$help,
 		"man"		=> \$man,
-	) || pod2usage( -verbose => 0,
-		-exitval => 1);
+	) || pod2usage( -verbose => 0, -exitval => 1 );
 	@argv = @ARGV;
 
-	pod2usage( -verbose => 1)
+	pod2usage( -verbose => 1 )
 		if($help);
-	pod2usage( -verbose => 3)
+	pod2usage( -verbose => 3 )
 		if($man);
 
 	# read from STDIN or from file
@@ -400,7 +453,7 @@ sub main(@)
 
 	# ASLR check
 	warn("WARNING: ASLR enabled, but no --pid or --maps-file provided !\n")
-		if(checkASLR() && (!$pid && !$mapsFile));
+		if(checkASLR() && (!$pid && !$mapsFile) && $WARNING >= 0);
 
 	# process symbols now
 	my @data = process($mapsFile, $workDir, $pid, @symbols);
@@ -457,7 +510,7 @@ NOTE: This script can be also used as perl module.
 =item I<BACKTRACE-FILE>
 
 Path to backtrace file. This file must contain symbols (one per line) and I<might> contain also content of 
-the maps file, divided by line with single comma (see B<EXAMPLES>) or line begging with '=' character.
+the maps file, divided by line with single dot (see B<EXAMPLES>) or line begging with '=' character.
 The same applies if reading backtrace from stdin.
 
 =item I<SYMBOL>
@@ -516,7 +569,7 @@ Show man page.
 
 =head1 EXAMPLES
 
-	# pass symbols and maps divided by single comma on line
+	# pass symbols and maps divided by single dot on line
 	$ backtrace2line
 	./leak-01(main+0x32)[0x7f00ad7a4af2]
 	/lib64/libc.so.6(__libc_start_main+0x11b)[0x7f00acfe31cb]

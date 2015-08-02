@@ -2,12 +2,12 @@
 ################################################################################
 
 Program : log-malloc2 (library)
-Version	: 0.3.0
+Version	: 0.4.0
 Purpose	: Malloc logging library with backtrace and byte-exact memory
 		tracking.
 License	: GNU GPL v3 (see file COPYING)
 	  GNU LGPL v3 (see file COPYING-LGPL)
-Author	: Samuel Behan <_samuel_._behan_(at)_dob_._sk> (c) 2011-2014
+Author	: Samuel Behan <_samuel_._behan_(at)_dob_._sk> (c) 2011-2015
 Web	: http://devel.dob.sk/log-malloc2
 	  http://blog.dob.sk/category/devel/log-malloc2 (howto, tutorial)
 
@@ -36,7 +36,7 @@ Web	: http://devel.dob.sk/log-malloc2
 ------------
 
      * logging to file descriptor 1022 (if opened)
-     * call stack backtrace (using GNU backtrace() if available)
+     * call stack backtrace (via GNU backtrace() or libunwind)
      * requested memory tracking (byte-exact)
      * allocated memory tracking (byte-exact - using malloc_usable_size())
      * process memory status tracking (from /proc/self/statm)
@@ -82,8 +82,8 @@ Web	: http://devel.dob.sk/log-malloc2
 	* log-malloc-trackusage
 		Script to track program memory usage over time.
 
-     This scripts can be also used as perl packages, because they export functions
-     to parse and analyse trace file or convert backtraces.
+     These scripts can be also used as perl packages, because they export functions
+     to parse and analyse trace file or convert backtraces (modulino concept).
 
 
 ---------
@@ -150,7 +150,7 @@ Web	: http://devel.dob.sk/log-malloc2
 	Pre-initializes backtrace() function, to avoid later memory alocations.
 	Use of this function is optional.
 
-    ssize_t log_malloc_backtrace(int fd)
+     ssize_t log_malloc_backtrace(int fd)
 
 	Generate current backtrace including process memory map (/proc/self/maps) to
 	make backtrace symbol conversion easier. Generated output can be directly
@@ -162,8 +162,9 @@ Web	: http://devel.dob.sk/log-malloc2
 --------------------
 
     * Log to tmpfs, or other FS that handles write operation effectively
+
         If traced application intensively allocates memory, consider logging to tmpf
-	because writting to trace fd is the slowest operation, that is in addition
+	because writting to trace fd is the slowest operation, that migbt be in addition
 	protected by a mutex, thus serializing multithreaded memory allocations.
 
 

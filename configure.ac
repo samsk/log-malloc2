@@ -1,7 +1,7 @@
 ## liblog-malloc2
 ####
 
-AC_INIT([log-malloc2], [0.3.0], [_samuel_._behan_(at)_dob_._sk], [log-malloc2],
+AC_INIT([log-malloc2], [0.4.0], [_samuel_._behan_(at)_dob_._sk], [log-malloc2],
         [http://devel.dob.sk/log-malloc2])
 AC_PREREQ([2.59])
 AM_INIT_AUTOMAKE([1.10 -Wall no-define])
@@ -23,7 +23,7 @@ AC_PROG_RANLIB
 
 LT_INIT([disable-static])
 
-AC_CHECK_HEADERS([fcntl.h stdint.h stdlib.h sys/time.h unistd.h stdbool.h])
+AC_CHECK_HEADERS([fcntl.h stdint.h stdlib.h sys/time.h unistd.h stdbool.h libunwind.h])
 
 AC_CHECK_FUNCS([ pread backtrace backtrace_symbols_fd ])
 
@@ -35,6 +35,18 @@ AC_CHECK_LIB(pthread, pthread_mutex_trylock, , [
 	AC_MSG_ERROR([
 Can't find the pthread library (libpthread.so) !])])
 
+no_libunwind=no
+AC_ARG_WITH([libunwind],
+  AS_HELP_STRING([--with-libunwind], [use libunwind for backtrace]),
+  [no_libunwind=no], [no_libunwind=yes]
+)
+
+libunwind=no
+if test "x$no_libunwind" != "xyes"; then
+   AC_CHECK_HEADER([libunwind.h], [libunwind=yes], [libunwind=no])
+fi
+
+no_optimize=no
 AC_ARG_ENABLE([optimize],
   AS_HELP_STRING([--disable-optimize], [do not optimize library]),
   [no_optimize=yes], [no_optimize=no]
@@ -64,11 +76,17 @@ fi
 CFLAGS="-DWITH_PTHREADS -D_GNU_SOURCE -Xcompiler -nostartfiles"
 LDFLAGS="-ldl -lpthread"
 
-if test "x$no_optimize" != "xyes";
+if test "x$no_optimize" != "xyes"
 then
 	CFLAGS="$CFLAGS -O2"
 else
 	CFLAGS="$CFLAGS -g"
+fi
+
+if test "x$libunwind" != "xno"
+then
+	LDFLAGS="$LDFLAGS -lunwind-generic"
+	AC_DEFINE(HAVE_UNWIND, 1, [Use libunwind for backtrace])
 fi
 
 # Define these substitions here to keep all version information in one place.
@@ -76,7 +94,7 @@ fi
 # refer to the libtool manual, section "Updating library version information":
 # http://www.gnu.org/software/libtool/manual/html_node/Updating-version-info.html
 AC_SUBST([LOG_MALLOC2_SO_VERSION], [1:0:0])
-AC_SUBST([LOG_MALLOC2_API_VERSION], [0.3])
+AC_SUBST([LOG_MALLOC2_API_VERSION], [0.4])
 
 # Override the template file name of the generated .pc file, so that there
 # is no need to rename the template file when the API version changes.

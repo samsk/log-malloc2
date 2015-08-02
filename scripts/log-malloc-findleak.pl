@@ -22,7 +22,7 @@ use Data::Dumper;
 use File::Basename;
 
 # VERSION
-our $VERSION = "0.3";
+our $VERSION = "0.4";
 
 my $LIBEXECDIR;
 BEGIN {	$LIBEXECDIR = Cwd::abs_path(dirname(readlink(__FILE__) || __FILE__)); };
@@ -170,17 +170,16 @@ sub main(@)
 		"full-names"	=> \$fullName,
 		"h|?|help"	=> \$help,
 		"man"		=> \$man,
-	) || pod2usage( -verbose => 0,
-		-exitval => 1);
+	) || pod2usage( -verbose => 0, -exitval => 1 );
 	@argv = @ARGV;
 
-	pod2usage( -verbose => 1)
+	pod2usage( -verbose => 1 )
 		if($help);
-	pod2usage( -verbose => 3)
+	pod2usage( -verbose => 3 )
 		if($man);
 
-	pod2usage( -msg => "$0: log-malloc trace filename required", -verbose => 1,
-		-exitval => 1)
+	pod2usage( -msg => "$0: log-malloc trace filename required",
+		-verbose => 0, -exitval => 1 )
 		if(!$file);
 
 	# whole file to memory

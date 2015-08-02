@@ -1,4 +1,8 @@
 
+0.4.0b Sun Aug  2 22:20:42 CEST 2015
+	- use libunwind for backtrace if available
+	- scripts modified to support decoding of libuwind based backtrace
+
 0.3.0 Sun Nov 23 21:12:54 CET 2014
 	- add manpages
 	- release

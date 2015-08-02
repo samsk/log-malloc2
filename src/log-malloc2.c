@@ -57,13 +57,21 @@
 #include <errno.h>
 #include <malloc.h>
 
+#ifdef HAVE_UNWIND
+#include <libunwind.h>
+#endif
+
 #include <dlfcn.h>
 
 #include "log-malloc2.h"
 #include "log-malloc2_internal.h"
 
 /* config */
-#define LOG_BUFSIZE		128
+#ifdef HAVE_UNWIND
+#define LOG_BUFSIZE	(128 + (256 * LOG_MALLOC_BACKTRACE_COUNT))
+#else
+#define LOG_BUFSIZE	128
+#endif
 
 /**
   size       total program size (same as VmSize in /proc/[pid]/status)
@@ -263,9 +271,19 @@ static inline void log_trace(char *str, size_t len, size_t max_size, int print_s
 	int w;
 	static __thread int in_trace = 0;
 
-	/* prevent deadlock, because inital backtrace call can involve some allocs */
+	/* prevent deadlock, because inital backtrace call might involve some allocs */
 	if(!in_trace)
 	{
+#ifdef HAVE_UNWIND
+		int unwind = 0;
+		unw_context_t uc;
+		unw_cursor_t cursor; 
+		int unwind_count = 0;
+
+		unwind = (unw_getcontext(&uc) == 0);
+		if(unwind)
+			unwind = (unw_init_local(&cursor, &uc) == 0);
+#else
 #ifdef HAVE_BACKTRACE
 		int nptrs = 0;
 		void *buffer[LOG_MALLOC_BACKTRACE_COUNT + 1];
@@ -274,6 +292,7 @@ static inline void log_trace(char *str, size_t len, size_t max_size, int print_s
 
 		if(print_stack)
 			nptrs = backtrace(buffer, LOG_MALLOC_BACKTRACE_COUNT);
+#endif
 #endif
 
 		if(g_ctx.statm_fd != -1 && (max_size - len) > 2)
@@ -284,8 +303,35 @@ static inline void log_trace(char *str, size_t len, size_t max_size, int print_s
 			str[len++] = '\n';   /* add NL back */
 		}
 
-		/* try synced write */
+#ifdef HAVE_UNWIND
+		while(unwind && unwind_count < LOG_MALLOC_BACKTRACE_COUNT
+			&& unw_step(&cursor) > 0)
+		{
+			unw_word_t ip = 0;
+			unw_word_t offp = 0;
+			size_t len_start = len;
+
+			unw_get_reg(&cursor, UNW_REG_IP, &ip);
+
+			str[len++] = '*';
+			str[len++] = '(';
+			if(unw_get_proc_name(&cursor, &str[len], max_size - len - 1, &offp) == 0)
+			{
+				len += strnlen(&str[len], max_size - len - 1);
+				len += snprintf(&str[len], max_size - len - 1, "+0x%lx", offp);
+				str[len++] = ')';
+			}
+			else
+				len += -2;
+
+			len += snprintf(&str[len], max_size - len - 1, "[0x%lx]", ip);
+			str[len++] = '\n';
+			
+			unwind_count++;
+		}
+#else
 #if defined(HAVE_BACKTRACE) && defined(HAVE_BACKTRACE_SYMBOLS_FD)
+		/* try synced write */
 		if(nptrs && print_stack && LOCK(g_ctx.loglock))
 		{
 			w = write(g_ctx.memlog_fd, str, len);
@@ -293,6 +339,7 @@ static inline void log_trace(char *str, size_t len, size_t max_size, int print_s
 			in_trace = UNLOCK(g_ctx.loglock); /* failed unlock will not re-enable synced tracing */
 		}
 		else
+#endif
 #endif
 		{
 			w = write(g_ctx.memlog_fd, str, len);
