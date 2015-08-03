@@ -37,13 +37,23 @@ Can't find the pthread library (libpthread.so) !])])
 
 no_libunwind=no
 AC_ARG_WITH([libunwind],
-  AS_HELP_STRING([--with-libunwind], [use libunwind for backtrace]),
-  [no_libunwind=no], [no_libunwind=yes]
+  AS_HELP_STRING([--without-libunwind], [do not use libunwind for backtrace]),
+  [no_libunwind=yes], [no_libunwind=no]
+)
+
+libunwind_detail=no
+AC_ARG_WITH([libunwind-detail],
+  AS_HELP_STRING([--with-libunwind-detail], [more details in libunwind backtrace]),
+  [libunwind_detail=yes], [libunwind_detail=no]
 )
 
 libunwind=no
 if test "x$no_libunwind" != "xyes"; then
    AC_CHECK_HEADER([libunwind.h], [libunwind=yes], [libunwind=no])
+
+   if test "x$libunwind_detail" = "xyes"; then
+      AC_DEFINE(HAVE_UNWIND_DETAIL, 1, [Generate detailed libunwind backtrace])
+   fi
 fi
 
 no_optimize=no
@@ -102,3 +112,10 @@ AC_CONFIG_FILES([Makefile])
 AC_CONFIG_FILES([log-malloc2.pc])
 AC_CONFIG_FILES([scripts/log-malloc.pm])
 AC_OUTPUT
+
+# config results
+echo
+echo "HAVE_UNWIND		$libunwind"
+echo "HAVE_UNWIND_DETAIL	$libunwind_detail"
+echo
+

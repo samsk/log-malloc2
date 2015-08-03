@@ -243,13 +243,13 @@ sub process($$$@)
 
 		next if($sym eq "[0x0]");
 		verbose(1, "SYM_PARSE_FAILED: $sym\n"), next
-			if(!($sym =~ /^(.*?)\((.*?)\)?\[(.*?)\]$/o));
-		my ($exe, $offset, $addr) = ($1, $2, $3);
+			if(!($sym =~ /^\s*((.*?)\((.*?)\))?\[(.*?)\]\s*$/o));
+		my ($exe, $offset, $addr) = ($2, $3, $4);
 
 		my $libOffset = 0;
 		my $addrNum = addr2num($addr);
 
-		if($exe ne '*')
+		if($exe && $exe ne '*')
 		{
 			my $exeBN = basename($exe);
 

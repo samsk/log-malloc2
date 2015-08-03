@@ -161,11 +161,19 @@ Web	: http://devel.dob.sk/log-malloc2
 - PERFORMANCE TIPS -
 --------------------
 
+    * Ensure that libunwind is enabled
+
+	Libunwind generates backtrace approx. 2x faster than GNU backtrace().
+	With libunwind there is only single write() used for logging (compared to at
+	least 2 calls when using backtrace()). Futhermore, there is no protective mutex
+	locking needed, what should reduce waits in multi-threaded programs.
+
     * Log to tmpfs, or other FS that handles write operation effectively
 
-        If traced application intensively allocates memory, consider logging to tmpf
-	because writting to trace fd is the slowest operation, that migbt be in addition
-	protected by a mutex, thus serializing multithreaded memory allocations.
+        If traced application intensively allocates memory, consider logging to tmpfs
+	because writting to trace fd is the slowest operation, that might be in addition
+	protected by a mutex (if GNU backtrace is used), thus serializing multithreaded
+	memory allocations.
 
 
 ---------------------------------

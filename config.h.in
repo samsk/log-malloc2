@@ -66,6 +66,9 @@
 /* Use libunwind for backtrace */
 #undef HAVE_UNWIND
 
+/* Generate detailed libunwind backtrace */
+#undef HAVE_UNWIND_DETAIL
+
 /* Define to the sub-directory where libtool stores uninstalled libraries. */
 #undef LT_OBJDIR
 

@@ -1,4 +1,7 @@
 
+0.4.0b2 Mon Aug  3 22:14:21 CEST 2015
+	- libunwind backtracing performance optimized
+
 0.4.0b Sun Aug  2 22:20:42 CEST 2015
 	- use libunwind for backtrace if available
 	- scripts modified to support decoding of libuwind based backtrace

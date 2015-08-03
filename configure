@@ -766,6 +766,7 @@ with_gnu_ld
 with_sysroot
 enable_libtool_lock
 with_libunwind
+with_libunwind_detail
 enable_optimize
 enable_call_count
 enable_usable_size
@@ -1424,7 +1425,8 @@ Optional Packages:
   --with-gnu-ld           assume the C compiler uses GNU ld [default=no]
   --with-sysroot[=DIR]    Search for dependent libraries within DIR (or the
                           compiler's sysroot if not specified).
-  --with-libunwind        use libunwind for backtrace
+  --without-libunwind     do not use libunwind for backtrace
+  --with-libunwind-detail more details in libunwind backtrace
 
 Some influential environment variables:
   CXX         C++ compiler command
@@ -15922,9 +15924,20 @@ no_libunwind=no
 
 # Check whether --with-libunwind was given.
 if test "${with_libunwind+set}" = set; then :
-  withval=$with_libunwind; no_libunwind=no
+  withval=$with_libunwind; no_libunwind=yes
 else
-  no_libunwind=yes
+  no_libunwind=no
+
+fi
+
+
+libunwind_detail=no
+
+# Check whether --with-libunwind-detail was given.
+if test "${with_libunwind_detail+set}" = set; then :
+  withval=$with_libunwind_detail; libunwind_detail=yes
+else
+  libunwind_detail=no
 
 fi
 
@@ -15939,6 +15952,12 @@ else
 fi
 
 
+
+   if test "x$libunwind_detail" = "xyes"; then
+
+$as_echo "#define HAVE_UNWIND_DETAIL 1" >>confdefs.h
+
+   fi
 fi
 
 no_optimize=no
@@ -18574,4 +18593,11 @@ if test -n "$ac_unrecognized_opts" && test "$enable_option_checking" != no; then
   { $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: unrecognized options: $ac_unrecognized_opts" >&5
 $as_echo "$as_me: WARNING: unrecognized options: $ac_unrecognized_opts" >&2;}
 fi
+
+
+# config results
+echo
+echo "HAVE_UNWIND		$libunwind"
+echo "HAVE_UNWIND_DETAIL	$libunwind_detail"
+echo
 

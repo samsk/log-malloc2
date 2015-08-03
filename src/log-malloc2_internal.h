@@ -70,6 +70,7 @@ typedef struct log_malloc_ctx_s {
 	int memlog_fd;
 	int statm_fd;
 	bool memlog_disabled;
+	clock_t clock_start;
 #ifdef HAVE_LIBPTHREAD
 	pthread_mutex_t loglock;
 #endif
@@ -82,7 +83,8 @@ typedef struct log_malloc_ctx_s {
 		{0, 0, 0, 0, 0, 0, 0, 0},	\
 		LOG_MALLOC_TRACE_FD,		\
 		-1,				\
-		false
+		false,				\
+		0
 
 #ifdef HAVE_LIBPTHREAD
 #define LOG_MALLOC_CTX_INIT			\

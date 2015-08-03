@@ -56,8 +56,12 @@
 #include <signal.h>
 #include <errno.h>
 #include <malloc.h>
+#include <time.h>
 
 #ifdef HAVE_UNWIND
+/* speedup unwinding */
+#define UNW_LOCAL_ONLY 1
+
 #include <libunwind.h>
 #endif
 
@@ -68,7 +72,11 @@
 
 /* config */
 #ifdef HAVE_UNWIND
+#ifdef HAVE_UNWIND_DETAIL
 #define LOG_BUFSIZE	(128 + (256 * LOG_MALLOC_BACKTRACE_COUNT))
+#else
+#define LOG_BUFSIZE	(128 + (32 * LOG_MALLOC_BACKTRACE_COUNT))
+#endif
 #else
 #define LOG_BUFSIZE	128
 #endif
@@ -171,7 +179,8 @@ static void *__init_lib(void)
 	DL_RESOLVE(posix_memalign);
 	DL_RESOLVE(valloc);
 
-	//TODO: call backtrace here to init itself
+	/* clock */
+	g_ctx.clock_start = clock();
 
 	/* post-init status */
 	if(!g_ctx.memlog_disabled)
@@ -179,6 +188,9 @@ static void *__init_lib(void)
 		int s, w;
 		char path[256];
 		char buf[LOG_BUFSIZE + sizeof(path)];
+
+		s = snprintf(buf, sizeof(buf), "# CLOCK-START %lu\n", g_ctx.clock_start);
+		w = write(g_ctx.memlog_fd, buf, s);
 
 		s = snprintf(buf, sizeof(buf), "# PID %u\n", getpid());
 		w = write(g_ctx.memlog_fd, buf, s);
@@ -207,6 +219,7 @@ static void *__init_lib(void)
 				g_ctx.stat.free);
 		w = write(g_ctx.memlog_fd, buf, s);
 
+
 		/* auto-disable trace if file is not open  */
 		if(w == -1 && errno == EBADF)
 			g_ctx.memlog_disabled = true;
@@ -226,6 +239,8 @@ static void __attribute__ ((constructor))log_malloc2_init(void)
 
 static void __fini_lib(void)
 {
+	clock_t clck = clock();
+
 	/* check already finalized */
 	if(!__sync_bool_compare_and_swap(&g_ctx.init_done,
 		LOG_MALLOC_INIT_DONE, LOG_MALLOC_FINI_DONE))
@@ -247,6 +262,12 @@ static void __fini_lib(void)
 
 		/* maps out here, because dynamic libs could by mapped during run */
 		copyfile(maps_head, sizeof(maps_head) - 1, g_maps_path, g_ctx.memlog_fd);
+
+		s = snprintf(buf, sizeof(buf), "# CLOCK-END %lu\n", clck);
+		w = write(g_ctx.memlog_fd, buf, s);
+
+		s = snprintf(buf, sizeof(buf), "# CLOCK-DIFF %lu\n", clck - g_ctx.clock_start);
+		w = write(g_ctx.memlog_fd, buf, s);
 	}
 
 	if(g_ctx.statm_fd != -1)
@@ -266,6 +287,33 @@ static void __attribute__ ((destructor))log_malloc2_fini(void)
 /*
  *  INTERNAL FUNCTIONS
  */
+static inline size_t int2hex(unsigned long int num, char *str, size_t max_size)
+{
+	size_t len = 0;
+	const static char hex[] = { '0', '1', '2', '3', '4', '5', '6', '7',
+	                        '8', '9' ,'a', 'b', 'c', 'd', 'e', 'f' };
+
+	do
+	{
+		str[len++] = hex[ num & 0xf ];
+		num >>= 4;
+ 	} while(num!=0);
+ 
+ 	unsigned int ii = 0;
+	for(ii = 0; ii < (len / 2); ii++)
+	{
+		const unsigned int pos = len - ii - 1;
+		const char w = str[ii];
+
+		str[ii] = str[pos];
+		str[pos] = w;
+	}
+	str[len] = '\0';
+
+	return len;
+}
+
+
 static inline void log_trace(char *str, size_t len, size_t max_size, int print_stack)
 {
 	int w;
@@ -280,9 +328,12 @@ static inline void log_trace(char *str, size_t len, size_t max_size, int print_s
 		unw_cursor_t cursor; 
 		int unwind_count = 0;
 
-		unwind = (unw_getcontext(&uc) == 0);
-		if(unwind)
-			unwind = (unw_init_local(&cursor, &uc) == 0);
+		if(print_stack)
+		{
+			unwind = (unw_getcontext(&uc) == 0);
+			if(unwind)
+				unwind = (unw_init_local(&cursor, &uc) == 0);
+		}
 #else
 #ifdef HAVE_BACKTRACE
 		int nptrs = 0;
@@ -304,8 +355,9 @@ static inline void log_trace(char *str, size_t len, size_t max_size, int print_s
 		}
 
 #ifdef HAVE_UNWIND
-		while(unwind && unwind_count < LOG_MALLOC_BACKTRACE_COUNT
-			&& unw_step(&cursor) > 0)
+		while(print_stack && unwind && unwind_count < LOG_MALLOC_BACKTRACE_COUNT
+			&& unw_step(&cursor) > 0
+			&& max_size - len > (16 + 5))
 		{
 			unw_word_t ip = 0;
 			unw_word_t offp = 0;
@@ -313,6 +365,8 @@ static inline void log_trace(char *str, size_t len, size_t max_size, int print_s
 
 			unw_get_reg(&cursor, UNW_REG_IP, &ip);
 
+#ifdef HAVE_UNWIND_DETAIL
+			/* this harms performance */
 			str[len++] = '*';
 			str[len++] = '(';
 			if(unw_get_proc_name(&cursor, &str[len], max_size - len - 1, &offp) == 0)
@@ -323,8 +377,13 @@ static inline void log_trace(char *str, size_t len, size_t max_size, int print_s
 			}
 			else
 				len += -2;
+#endif
 
-			len += snprintf(&str[len], max_size - len - 1, "[0x%lx]", ip);
+			str[len++] = '[';
+			str[len++] = '0';
+			str[len++] = 'x';
+			len += int2hex(ip, &str[len], max_size - len - 1); // max 16 chars
+			str[len++] = ']';
 			str[len++] = '\n';
 			
 			unwind_count++;
