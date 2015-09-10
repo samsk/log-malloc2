@@ -4,7 +4,7 @@
  * log-malloc2 API
  *	Malloc logging library with backtrace and byte-exact memory tracking.
  * 
- * Author: Samuel Behan <_samuel_._behan_(at)_dob_._sk> (C) 2013-2014
+ * Author: Samuel Behan <_samuel_._behan_(at)_dob_._sk> (C) 2013-2015
  *
  * License: GNU LGPLv3 (http://www.gnu.org/licenses/lgpl.html)
  *

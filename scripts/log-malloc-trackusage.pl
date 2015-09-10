@@ -2,7 +2,7 @@
 # log-malloc2 / trackusage
 #	Outputs memory usage
 #
-# Author: Samuel Behan <_samuel_._behan_(at)_dob_._sk> (C) 2013-2014
+# Author: Samuel Behan <_samuel_._behan_(at)_dob_._sk> (C) 2013-2015
 #
 # License: GNU GPLv3 (http://www.gnu.org/licenses/gpl.html)
 #

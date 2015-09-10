@@ -4,7 +4,7 @@
  * log-malloc2_util
  *	Helper function, all inlined, no linking required.
  * 
- * Author: Samuel Behan <_samuel_._behan_(at)_dob_._sk> (C) 2011-2014
+ * Author: Samuel Behan <_samuel_._behan_(at)_dob_._sk> (C) 2011-2015
  *
  * License: MIT (http://opensource.org/licenses/MIT) (free to use, modify, relicense...)
  *
