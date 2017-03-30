@@ -7,7 +7,7 @@ produces simple text trace output, that makes it easy to find leaks and also ide
 [![Build Status](https://travis-ci.org/samsk/log-malloc2.svg)](https://travis-ci.org/samsk/log-malloc2)
 
 
-#Features
+# Features
 
 - logging to file descriptor 1022 (if opened)
 - call stack **backtrace** (via GNU backtrace() or libunwind)
@@ -19,7 +19,7 @@ produces simple text trace output, that makes it easy to find leaks and also ide
 - optional **C API** for runtime memory usage checking
 
 
-#Usage
+# Usage
 
 `log-malloc -o /tmp/program.log command args`
 
@@ -27,8 +27,12 @@ OR
 
 `LD_PRELOAD=./liblog-malloc2.so command args ... 1022>/tmp/program.log`
 
+# Performance
 
-#Helper scripts
+There is (non-)small performance penalty related to writing to logfile. One can improve this by redirecting write to tmpfs or similar fast-write filesystem. If log-malloc2 is compiled **without libunwind**, additionally a synchronization mutex is used while writing to logfile, thus every memory allocation is acting as giant synchronization lock (slowed down by write to logfile).
+
+
+# Helper scripts
 
 - `backtrace2line`
  - Script to automatically convert backtrace in files and line numbers.
@@ -106,7 +110,7 @@ OR
 * Project home: [http://devel.dob.sk/log-malloc2](http://devel.dob.sk/log-malloc2?u=github)
 
 
-#Examples
+# Examples
 
 ###Example Trace Output
 
