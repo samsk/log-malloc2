@@ -1,7 +1,7 @@
 ## liblog-malloc2
 ####
 
-AC_INIT([log-malloc2], [0.4.0], [_samuel_._behan_(at)_dob_._sk], [log-malloc2],
+AC_INIT([log-malloc2], [0.4.1], [_samuel_._behan_(at)_dob_._sk], [log-malloc2],
         [http://devel.dob.sk/log-malloc2])
 AC_PREREQ([2.59])
 AM_INIT_AUTOMAKE([1.10 -Wall no-define])
@@ -95,7 +95,7 @@ fi
 
 if test "x$libunwind" != "xno"
 then
-	LDFLAGS="$LDFLAGS -lunwind-generic"
+	LDFLAGS="$LDFLAGS -lunwind-generic -lunwind"
 	AC_DEFINE(HAVE_UNWIND, 1, [Use libunwind for backtrace])
 fi
 

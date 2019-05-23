@@ -13,7 +13,7 @@ int main()
 	x = malloc(100);
 	x[0] = '\0';
 
-LOG_MALLOC_COMPARE(savepoint1, 0);
+	LOG_MALLOC_COMPARE(savepoint1, 0);
 	ssize_t t = LOG_MALLOC_COMPARE(savepoint1, 0);
 	printf("TEST = %ld\n", t);
 	LOG_MALLOC_ASSERT(savepoint1, 0);
