@@ -35,67 +35,67 @@ There is (non-)small performance penalty related to writing to logfile. One can 
 # Helper scripts
 
 - `backtrace2line`
- - Script to automatically convert backtrace in files and line numbers.
- - Can also deal with [ASLR](https://en.wikipedia.org/wiki/Address_space_layout_randomization) randomized addresses.
+  - Script to automatically convert backtrace in files and line numbers.
+  - Can also deal with [ASLR](https://en.wikipedia.org/wiki/Address_space_layout_randomization) randomized addresses.
 
 - `log-malloc-findleak`
- - Script to discover possible program memory leaks from trace file
+  - Script to discover possible program memory leaks from trace file
 
 - `log-malloc-trackusage`
- - Script to track program memory usage over time.
+  - Script to track program memory usage over time.
 
 
 # C API
 
 - ```size_t log_malloc_get_usage(void)```
- - Get actual program memory usage in bytes
+  - Get actual program memory usage in bytes
 
 - ```void log_malloc_trace_enable(void)```
- - Enable trace messages to be printed to trace fd.
+  - Enable trace messages to be printed to trace fd.
 
 - ```void log_malloc_trace_disable(void)```
- - Disable trace messages.
+  - Disable trace messages.
 
 - ```int log_malloc_trace_printf(const char *fmt, ...)```
- - Printf smth. to trace fd (message size is limited to 1024 bytes).
+  - Printf smth. to trace fd (message size is limited to 1024 bytes).
 
 - ```LOG_MALLOC_SAVE(name, trace)``` [MACRO]
- - Creates savepoint with given _name_ that stores actual memory usage.
- - If _trace_ is true, message will be logged to trace fd.
+  - Creates savepoint with given _name_ that stores actual memory usage.
+  - If _trace_ is true, message will be logged to trace fd.
 
 - ```LOG_MALLOC_UPDATE(name, trace)``` [MACRO]
- - Updates actual memory usage in savepoint with given _name_.
- - If _trace_ is true, trace message will be logged to trace fd.
+  - Updates actual memory usage in savepoint with given _name_.
+  - If _trace_ is true, trace message will be logged to trace fd.
 
 - ```LOG_MALLOC_COMPARE(name, trace)``` [MACRO]
- - Compares actual memory usage with the saved one under given _name_.
- - If _trace_ is true, trace message will be logged to trace fd.
- - Call returns memory usage difference (size_t).
+  - Compares actual memory usage with the saved one under given _name_.
+  - If _trace_ is true, trace message will be logged to trace fd.
+  - Call returns memory usage difference (size_t).
 
 - ```LOG_MALLOC_ASSERT(name, iter)``` [MACRO]
- - ASSERT with fail, if actual memory usage differs from the one saved in savepoint.
- - _iter_ can specify that assertion should be checked first after given number of LOG_MALLOC_SAVE() iterations.
+  - ASSERT with fail, if actual memory usage differs from the one saved in savepoint.
+  - _iter_ can specify that assertion should be checked first after given number of LOG_MALLOC_SAVE() iterations.
 
 - ```LOG_MALLOC_NDEBUG``` [MACRO]
- - If defined, above macros will generate no code.
+  - If defined, above macros will generate no code.
 
 
 # C INLINE API
 
 - ```void log_malloc_backtrace_init(void)```
- - Pre-initializes backtrace() function, to avoid later memory alocations. Use of this function is optional.
+  - Pre-initializes backtrace() function, to avoid later memory alocations. Use of this function is optional.
 
 - ```ssize_t log_malloc_backtrace(int fd)```
- - Generate current backtrace including process memory map (/proc/self/maps) to make backtrace symbol conversion easier.
- - Generated output can be directly pasted to _backtrace2line_ script.
+  - Generate current backtrace including process memory map (/proc/self/maps) to make backtrace symbol conversion easier.
+  - Generated output can be directly pasted to _backtrace2line_ script.
 
 
 # Author
 
 - ***Samuel Behan***
- - **contact**: samuel(dot)behan(at)dob(dot)sk
- - **homepage**: [http://dob.sk](http://dob.sk?u=github)
- - **projects**: [http://devel.dob.sk](http://devel.dob.sk?u=github)
+  - **contact**: samuel(dot)behan(at)dob(dot)sk
+  - **homepage**: [http://dob.sk](http://dob.sk?u=github)
+  - **projects**: [http://devel.dob.sk](http://devel.dob.sk?u=github)
 
 
 # Licensing
